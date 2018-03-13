@@ -1,0 +1,6 @@
+# this should install everything you need for development or testing
+-r src/requirements.txt
+-r tests/requirements.txt
+aiohttp-devtools==0.8
+ipython==6.2.1
+docker-compose==1.19.0

@@ -1,0 +1,71 @@
+version: '3.4'
+
+volumes:
+ pg_data: {}
+
+services:
+  logs:
+    image: gliderlabs/logspout
+    environment:
+      SYSLOG_HOSTNAME: ${SERVER_NAME:-mithra}
+    volumes:
+    - /var/run/docker.sock:/var/run/docker.sock
+    restart: always
+
+  postgres:
+    image: postgres:10.3-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: docker
+    volumes:
+    - pg_data:/var/lib/postgresql/data
+    restart: always
+    depends_on:
+    - logs
+
+  web:
+    build:
+      context: ./src
+      dockerfile: Dockerfile.web
+    environment:
+      APP_PG_HOST: postgres
+      APP_PG_PASSWORD: docker
+      COMMIT: ${COMMIT}
+      RELEASE_DATE: ${RELEASE_DATE}
+      RAVEN_DSN: ${RAVEN_DSN}
+      SERVER_NAME: ${SERVER_NAME:-mithra}
+    restart: always
+    depends_on:
+    - postgres
+
+  backend:
+    build:
+      context: ./src
+      dockerfile: Dockerfile.backend
+    environment:
+      APP_PG_HOST: postgres
+      APP_PG_PASSWORD: docker
+      APP_SIP_USERNAME: ${APP_SIP_USERNAME}
+      APP_SIP_PASSWORD: ${APP_SIP_PASSWORD}
+      APP_SIP_HOST: ${APP_SIP_HOST}
+      APP_SIP_PORT: ${APP_SIP_PORT}
+      COMMIT: ${COMMIT}
+      RAVEN_DSN: ${RAVEN_DSN}
+      SERVER_NAME: ${SERVER_NAME:-mithra}
+    restart: always
+    depends_on:
+    - postgres
+
+  pgweb:
+    image: sosedoff/pgweb:0.9.11
+    entrypoint:
+    - '/usr/bin/pgweb'
+    - '--bind=0.0.0.0'
+    - '--listen=80'
+    - '--auth-user=${PG_AUTH_USER:-testing}'
+    - '--auth-pass=${PG_AUTH_PASS:-wq96nbgqe35msT41Jr7LaHzANhxcyU4V7lesFzD0wJjef07PwS}'
+    restart: always
+    environment:
+    - DATABASE_URL=postgres://postgres:docker@postgres:5432/mithra?sslmode=disable
+    depends_on:
+    - postgres
