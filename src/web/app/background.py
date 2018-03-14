@@ -52,7 +52,7 @@ class Background:
         logger.info('sending %s to %d connected websockets', data, len(self.websockets))
         for ws in self.websockets:
             try:
-                ws.send_str(data)
+                await ws.send_str(data)
             except (RuntimeError, AttributeError):
                 logger.info(' ws "%s" closed, removing', ws)
                 self.remove_ws(ws)

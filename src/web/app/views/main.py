@@ -33,7 +33,7 @@ async def main_ws(request):
     logger.info('ws connection %s', session)
     await ws.prepare(request)
     json_str = await request.app['pg'].fetchval(calls_sql)
-    ws.send_str(json_str or '[]')
+    await ws.send_str(json_str or '[]')
     request.app['background'].add_ws(ws)
     try:
         async for msg in ws:

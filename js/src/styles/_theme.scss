@@ -1,0 +1,152 @@
+@import 'variables';
+
+body {
+  padding-top: 7rem;
+  background-color: $background;
+  padding-bottom: 3rem;
+  overflow-y: scroll;
+}
+
+.navbar {
+  background-color: $background;
+}
+
+@mixin stripes($colour1, $lighten) {
+  background: repeating-linear-gradient(
+    45deg,
+    $colour1,
+    $colour1 10px,
+    lighten($colour1, $lighten) 10px,
+    lighten($colour1, $lighten) 20px
+  );
+}
+
+.nav2 {
+  height: 33px;
+  color: white;
+  .back {
+    transition: all 0.5s ease;
+    @include stripes(#009688, 3%);
+    opacity: 0.92;
+    background-position-x: 0;
+    height: 100%;
+  }
+  &.anon .back{
+    filter: brightness(70%);
+  }
+  &.offline .back {
+    filter: grayscale(100%) brightness(120%);
+  }
+  .container {
+    position: relative;
+    top: -28px;
+  }
+
+  &.editing {
+    height: 50px;
+    .container {
+        top: -45px;
+    }
+  }
+  .nav-title-edit {
+    width: 500px;
+    display: inline-block;
+  }
+}
+
+.box {
+  background-color: white;
+  border-radius: 4px;
+  box-shadow: 0 2px 15px rgba(84,96,103,.25);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.box-list {
+  @extend .box;
+  padding: 1rem 0;
+}
+
+.conv-list {
+  a {
+    display: block;
+    color: $gray-800;
+    padding: 0.5rem 1rem;
+    border-top: 1px solid $gray-200;
+    &:hover {
+      text-decoration: none;
+      background-color: $gray-100;
+    }
+    span {
+      vertical-align: middle;
+      display: inline-block;
+    }
+    .subject {
+      font-size: 1.1rem;
+      min-width: 150px;
+      margin-right: 0.5rem;
+      max-width: 220px;
+      text-overflow: ellipsis;
+      overflow: hidden;
+      white-space: nowrap;
+    }
+    .body {
+      color: #7790a9;
+      font-size: 0.9em;
+      vertical-align: bottom;
+    }
+
+    .icon {
+      color: #627384;
+      font-size: 0.8em;
+      margin-right: 0.6rem;
+      .fa {
+        margin-right: 0.2rem;
+      }
+    }
+  }
+}
+
+.detail {
+  margin: 0.3rem 0;
+  label {
+    margin: 0;
+    color: #6b7c93;
+    font-size: 0.9em;
+  }
+  > div {
+    line-height: 1.2;
+  }
+}
+
+.box-msg {
+  @extend .box;
+  padding: 0.6rem 0;
+  .head {
+    padding: 0 0.8rem 0.3rem;
+    border-bottom: 1px solid $gray-200;
+    .text-muted {
+      font-size: 0.9em;
+    }
+    .btn-sm {
+      padding: 0.15rem .5rem;
+    }
+  }
+  .body {
+    padding: 0.3rem 0.8rem 0;
+    iframe {
+      border: none;
+      width: 100%;
+      height: 50px;
+      max-height: 600px !important;
+    }
+  }
+}
+
+.action-details {
+  border-bottom: 1px solid $gray-200;
+  padding: 0 20px;
+  &:last-child {
+    border-bottom: none;
+  }
+}
