@@ -3,6 +3,13 @@ version: '3.4'
 volumes:
  pg_data: {}
 
+networks:
+  default:
+    driver: bridge
+    ipam:
+      config:
+      - subnet: 172.20.0.0/24
+
 services:
   logs:
     image: gliderlabs/logspout
@@ -23,9 +30,16 @@ services:
     depends_on:
     - logs
 
+  js:
+    build: js
+    restart: always
+    networks:
+      default:
+        ipv4_address: 172.20.0.101
+
   web:
     build:
-      context: ./src
+      context: src
       dockerfile: Dockerfile.web
     environment:
       APP_PG_HOST: postgres
@@ -35,12 +49,15 @@ services:
       RAVEN_DSN: ${RAVEN_DSN}
       SERVER_NAME: ${SERVER_NAME:-mithra}
     restart: always
+    networks:
+      default:
+        ipv4_address: 172.20.0.102
     depends_on:
     - postgres
 
   backend:
     build:
-      context: ./src
+      context: src
       dockerfile: Dockerfile.backend
     environment:
       APP_PG_HOST: postgres
@@ -67,5 +84,8 @@ services:
     restart: always
     environment:
     - DATABASE_URL=postgres://postgres:docker@postgres:5432/mithra?sslmode=disable
+    networks:
+      default:
+        ipv4_address: 172.20.0.103
     depends_on:
     - postgres
