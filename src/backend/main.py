@@ -1,5 +1,6 @@
 import asyncio
 import hashlib
+import json
 import logging
 import re
 import secrets
@@ -8,6 +9,7 @@ from time import time
 import asyncpg
 from multidict import CIMultiDict
 
+from shared.db import lenient_conn
 from shared.settings import PgSettings
 
 logger = logging.getLogger('mithra.backend.main')
@@ -77,20 +79,83 @@ def parse_headers(raw_headers):
     raise RuntimeError('unable to decode response')
 
 
-class EchoClientProtocol:
-    def __init__(self, settings: Settings):
+class Database:
+    def __init__(self, settings: Settings, loop):
         self.settings = settings
+        self._pg = None
+        self._loop = loop
+        self.tasks = []
+
+    async def init(self):
+        conn = await lenient_conn(self.settings)
+        await conn.close()
+        self._pg = await asyncpg.create_pool(dsn=self.settings.pg_dsn)
+
+    def record_call(self, number, country):
+        self.tasks.append(self._loop.create_task(self._record_call(number, country)))
+
+    async def _record_call(self, number, country):
+        async with self._pg.acquire() as conn:
+            # TODO get other info
+            await conn.execute('INSERT INTO calls (number, country) VALUES ($1, $2)', number, country)
+            data = json.dumps({
+                'number': number,
+                'country': country,
+            })
+            await conn.execute("SELECT pg_notify('call', $1::text)", data)
+
+    async def close(self):
+        await asyncio.gather(self.tasks)
+        await self._pg.close()
+
+
+class SipProtocol:
+    def __init__(self, sip_client):
+        self.client = sip_client
+
+    def connection_made(self, transport):
+        logger.info('connection established')
+        self.client.connection_made(transport)
+
+    def datagram_received(self, data, addr):
+        try:
+            self.client.process_response(data, addr)
+        except Exception as e:
+            logger.error('error processing datagram %s: %s', type(e), e, extra={
+                'data': {
+                    'datagram': try_decode(data),
+                    'addr': addr
+                }
+            })
+
+    def error_received(self, exc):
+        logger.error('error received: %s', exc)
+
+
+class SipClient:
+    def __init__(self, settings: Settings, db: Database, loop):
+        self.settings = settings
+        self.db = db
+        self.loop = loop
         self.transport = None
         self.auth_attempt = 0
+        self.authenticated = False
         self.local_ip = None
         self.cseq = 1
         self.call_id = secrets.token_hex()[:10]
         self.last_invitation = 0
 
+    def protocol_factory(self):
+        return SipProtocol(self)
+
     def connection_made(self, transport):
         self.transport = transport
         self.local_ip, _ = transport.get_extra_info('sockname')
-        logger.info('connection established')
+        self.authenticate()
+
+    def authenticate(self):
+        self.auth_attempt = 0
+        self.authenticated = False
         self.send(f"""\
 {AUTH_METHOD} sip:{self.settings.sip_host}:{self.settings.sip_port} SIP/2.0
 Via: SIP/2.0/UDP {self.local_ip}:5060;rport;branch={BRANCH}
@@ -101,19 +166,8 @@ CSeq: {self.cseq} {AUTH_METHOD}
 Contact: <sip:{self.settings.sip_username}@{self.local_ip};line=9ad550fb9d87b0f>
 Max-Forwards: 70
 User-Agent: TutorCruncher Address Book
-Expires: 60
+Expires: 3600
 Content-Length: 0""")
-
-    def datagram_received(self, data, addr):
-        try:
-            self.process_response(data, addr)
-        except Exception as e:
-            logger.error('error processing datagram %s: %s', type(e), e, extra={
-                'data': {
-                    'datagram': try_decode(data),
-                    'addr': addr
-                }
-            })
 
     def process_response(self, raw_data: bytes, addr):
         if raw_data.startswith(b'\x00'):
@@ -125,6 +179,7 @@ Content-Length: 0""")
         if status_code == 401:
             if self.auth_attempt > 1:
                 logger.error('repeated auth attempt')
+                return
             self.auth_attempt += 1
             auth = headers['WWW-Authenticate']
             params = parse_digest(auth)
@@ -143,18 +198,27 @@ Authorization: Digest username="{self.settings.sip_username}", realm="{realm}", 
 uri="{self.settings.sip_uri}", response="{md5digest(ha1, nonce, ha2)}", algorithm=MD5
 Max-Forwards: 70
 User-Agent: TutorCruncher Address Book
-Expires: 60
+Expires: 3600
 Content-Length: 0""")
-        elif status_code == 200:
+        elif not self.authenticated and status_code == 503:
+            logger.warning('503 while authenticating, retying in 8 seconds...', extra={
+                'data': {
+                    'status': status,
+                    'headers': headers,
+                    'data': try_decode(data),
+                }
+            })
+            self.loop.call_later(8, self.authenticate)
+        elif not self.authenticated and status_code == 200:
             logger.info('authenticated successfully')
-            self.auth_attempt = 0
+            self.authenticated = True
         elif status.get('method') == 'OPTIONS':
             # don't care
             pass
         elif status.get('method') == 'INVITE':
             n = time()
             if (n - self.last_invitation) > 1:
-                self.process_invite(headers)
+                self.process_invite_request(headers)
             self.last_invitation = n
         else:
             logger.warning('unknown datagram: %s', status, extra={
@@ -170,10 +234,7 @@ Content-Length: 0""")
         self.transport.sendto(data)
         self.cseq += 1
 
-    def error_received(self, exc):
-        logger.error('error received: %s', exc)
-
-    def process_invite(self, headers):
+    def process_invite_request(self, headers):
         from_header = headers['From']
         m = NUMBER.search(from_header)
         if m:
@@ -185,31 +246,29 @@ Content-Length: 0""")
             })
         country = headers.get('X-Brand', None)
         logger.info(f'incoming call from %s%s', number, f' ({country})' if country else '')
+        self.db.record_call(number, country)
+
+    def close(self):
+        self.transport.close()
+        self.loop.close()
 
 
-class Database:
-    def __init__(self, settings: Settings):
-        self.settings = settings
-        self.conn = None
-
-    async def init(self):
-        self.conn = await asyncpg.create_pool(
-            dsn=self.settings.pg_dsn,
-            min_size=1,
-            max_size=10,
-        )
+async def setup(settings, loop):
+    addr = settings.sip_host, settings.sip_port
+    db = Database(settings, loop)
+    await db.init()
+    client = SipClient(settings, db, loop)
+    await loop.create_datagram_endpoint(client.protocol_factory, remote_addr=addr)
+    return client
 
 
 def main():
     loop = asyncio.get_event_loop()
     settings = Settings()
-    addr = settings.sip_host, settings.sip_port
-    connect = loop.create_datagram_endpoint(lambda: EchoClientProtocol(settings), remote_addr=addr)
-    transport, protocol = loop.run_until_complete(connect)
+    client = loop.run_until_complete(setup(settings, loop))
     try:
         loop.run_forever()
     except (KeyboardInterrupt, SystemExit):
         pass
     finally:
-        transport.close()
-        loop.close()
+        client.close()

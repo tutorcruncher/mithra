@@ -2,64 +2,23 @@
 import asyncio
 import logging
 import logging.config
-import os
 import sys
 from pathlib import Path
 
 from aiohttp import ClientSession, web
-
-from app.main import create_app  # NOQA
-from app.patch import reset_database, run_patch  # NOQA
-from app.settings import Settings  # NOQA
 
 THIS_DIR = Path(__file__).parent
 if not Path(THIS_DIR / 'shared').exists():
     # when running outside docker
     sys.path.append(str(THIS_DIR / '..'))
 
+from shared.logs import setup_logging  # NOQA
+from app.main import create_app  # NOQA
+from app.patch import reset_database, run_patch  # NOQA
+from app.settings import Settings  # NOQA
+
 
 logger = logging.getLogger('mithra.web.run')
-
-
-def setup_logging(verbose: bool=False):
-    """
-    setup logging config by updating the arq logging config
-    """
-    log_level = 'DEBUG' if verbose else 'INFO'
-    raven_dsn = os.getenv('RAVEN_DSN', None)
-    if raven_dsn in ('', '-'):
-        # thus setting an environment variable of "-" means no raven
-        raven_dsn = None
-    config = {
-        'version': 1,
-        'disable_existing_loggers': False,
-        'formatters': {
-            'mithra.default': {
-                'format': '%(levelname)s %(name)20s: %(message)s',
-            },
-        },
-        'handlers': {
-            'mithra.default': {
-                'level': log_level,
-                'class': 'logging.StreamHandler',
-                'formatter': 'mithra.default',
-            },
-            'sentry': {
-                'level': 'WARNING',
-                'class': 'raven.handlers.logging.SentryHandler',
-                'dsn': raven_dsn,
-                'release': os.getenv('COMMIT', None),
-                'name': os.getenv('SERVER_NAME', '-')
-            },
-        },
-        'loggers': {
-            'mithra': {
-                'handlers': ['mithra.default', 'sentry'],
-                'level': log_level,
-            },
-        },
-    }
-    logging.config.dictConfig(config)
 
 
 async def _check(url):
@@ -75,23 +34,22 @@ async def _check(url):
 
 
 def check():
-    url = 'http://' + os.getenv('BIND', '127.0.0.1:8000')
     loop = asyncio.get_event_loop()
-    exit_code = loop.run_until_complete(_check(url))
+    exit_code = loop.run_until_complete(_check('http://127.0.0.1:8000'))
     if exit_code:
         exit(exit_code)
 
 
 if __name__ == '__main__':
-    setup_logging('--verbose' in sys.argv)
+    setup_logging()
     settings = Settings()
     if 'check' in sys.argv:
         print('running check...')
         check()
-    if 'reset_database' in sys.argv:
+    elif 'reset_database' in sys.argv:
         print('running reset_database...')
         reset_database(settings)
-    if 'patch' in sys.argv:
+    elif 'patch' in sys.argv:
         print('running patch...')
         args = list(sys.argv)
         print(args)

@@ -7,6 +7,7 @@ from aiohttp import web
 
 from shared.db import prepare_database
 
+from .background import Background
 from .settings import THIS_DIR, Settings
 from .views import favicon, index, robots_txt
 
@@ -15,11 +16,13 @@ async def startup(app: web.Application):
     settings: Settings = app['settings']
     await prepare_database(settings, False)
     app.update(
-        pg=await asyncpg.create_pool(dsn=settings.pg_dsn)
+        pg=await asyncpg.create_pool(dsn=settings.pg_dsn),
+        background=Background(app),
     )
 
 
 async def cleanup(app: web.Application):
+    await app['background'].close()
     await app['pg'].close()
 
 
