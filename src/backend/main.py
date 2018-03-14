@@ -5,6 +5,7 @@ import logging
 import re
 import secrets
 from time import time
+from typing import NamedTuple
 
 import asyncpg
 from multidict import CIMultiDict
@@ -13,9 +14,6 @@ from shared.db import lenient_conn
 from shared.settings import PgSettings
 
 logger = logging.getLogger('mithra.backend.main')
-
-AUTH_METHOD = 'REGISTER'
-BRANCH = secrets.token_hex()[:16].upper()
 
 
 class Settings(PgSettings):
@@ -27,6 +25,35 @@ class Settings(PgSettings):
     @property
     def sip_uri(self):
         return f'sip:{self.sip_host}:{self.sip_password}'
+
+
+REALM_REGEX = re.compile('realm="(.+?)"')
+NONCE_REGEX = re.compile('nonce="(.+?)"')
+RESPONSE_DECODE = re.compile(r'SIP/2.0 (?P<status_code>[0-9]{3}) (?P<status_message>.+)')
+REQUEST_DECODE = re.compile(r'(?P<method>[A-Za-z]+) (?P<to_uri>.+) SIP/2.0')
+NUMBER = re.compile(r'sip:(\d+)@')
+FIND_BRANCH = re.compile(r'branch=(.+?);')
+
+
+class Response(NamedTuple):
+    status: int
+    headers: CIMultiDict
+    response_data: bytes
+    request_data: str
+
+
+def parse_headers(raw_headers):
+    headers = CIMultiDict()
+    decoded_headers = raw_headers.decode().split('\r\n')
+    for line in decoded_headers[1:]:
+        k, v = line.split(': ', 1)
+        headers.add(k, v)
+
+    for regex in (RESPONSE_DECODE, REQUEST_DECODE):
+        m = regex.match(decoded_headers[0])
+        if m:
+            return m.groupdict(), headers
+    raise RuntimeError('unable to decode response headers')
 
 
 def try_decode(data: bytes):
@@ -41,42 +68,6 @@ def try_decode(data: bytes):
 
 def md5digest(*args):
     return hashlib.md5(':'.join(args).encode()).hexdigest()
-
-
-def parse_digest(header):
-    params = {}
-    for arg in header[7:].split(','):
-        k, v = arg.strip().split('=', 1)
-        if '="' in arg:
-            v = v[1:-1]
-        params[k] = v
-    return params
-
-
-RESPONSE_DECODE = re.compile(r'SIP/2.0 (?P<status_code>[0-9]{3}) (?P<status_message>.+)')
-REQUEST_DECODE = re.compile(r'(?P<method>[A-Za-z]+) (?P<to_uri>.+) SIP/2.0')
-NUMBER = re.compile(r'sip:(\d+)@')
-
-
-def parse_headers(raw_headers):
-    headers = CIMultiDict()
-    decoded_headers = raw_headers.decode().split('\r\n')
-    for line in decoded_headers[1:]:
-        k, v = line.split(': ', 1)
-        if k in headers:
-            o = headers.setdefault(k, [])
-            if not isinstance(o, list):
-                o = [o]
-            o.append(v)
-            headers[k] = o
-        else:
-            headers[k] = v
-
-    for regex in (REQUEST_DECODE, RESPONSE_DECODE):
-        m = regex.match(decoded_headers[0])
-        if m:
-            return m.groupdict(), headers
-    raise RuntimeError('unable to decode response')
 
 
 class Database:
@@ -119,7 +110,7 @@ class SipProtocol:
 
     def datagram_received(self, data, addr):
         try:
-            self.client.process_response(data, addr)
+            self.client.process_datagram(data, addr)
         except Exception as e:
             logger.error('error processing datagram %s: %s', type(e), e, extra={
                 'data': {
@@ -131,6 +122,9 @@ class SipProtocol:
     def error_received(self, exc):
         logger.error('error received: %s', exc)
 
+    def connection_lost(self, exc):
+        logger.debug('connection lost: %s', exc)
+
 
 class SipClient:
     def __init__(self, settings: Settings, db: Database, loop):
@@ -138,12 +132,69 @@ class SipClient:
         self.db = db
         self.loop = loop
         self.transport = None
-        self.auth_attempt = 0
-        self.authenticated = False
         self.local_ip = None
         self.cseq = 1
         self.call_id = secrets.token_hex()[:10]
         self.last_invitation = 0
+        self.connected = asyncio.Event()
+        self.futures = {}
+
+    async def init(self):
+        addr = self.settings.sip_host, self.settings.sip_port
+        await self.loop.create_datagram_endpoint(self.protocol_factory, remote_addr=addr)
+        await self.connected.wait()
+        await self.register()
+
+    async def register(self, expires=300):
+        common_headers = (
+            f'From: <sip:{self.settings.sip_username}@{self.settings.sip_host}:{self.settings.sip_port}>',
+            f'To: <sip:{self.settings.sip_username}@{self.settings.sip_host}:{self.settings.sip_port}>',
+            f'Call-ID: {self.call_id}',
+            f'Contact: <sip:{self.settings.sip_username}@{self.local_ip}>',
+            f'Expires: {expires}',
+            'Max-Forwards: 70',
+            'User-Agent: TutorCruncher Mithra',
+            'Content-Length: 0',
+        )
+
+        r1: Response = await self.request(
+            f'REGISTER sip:{self.settings.sip_host}:{self.settings.sip_port} SIP/2.0',
+            f'Via: SIP/2.0/UDP {self.local_ip}:5060;rport;branch=__branch__',
+            f'CSeq: {self.cseq} REGISTER',
+            *common_headers,
+        )
+        if r1.status != 401:
+            logger.warning('unexpected response to first REGISTER %s != 401', r1.status, extra={
+                'data': {'response': r1}
+            })
+            return
+
+        auth = r1.headers['WWW-Authenticate']
+        realm = REALM_REGEX.search(auth).groups()[0]
+        nonce = NONCE_REGEX.search(auth).groups()[0]
+        ha1 = md5digest(self.settings.sip_username, realm, self.settings.sip_password)
+        ha2 = md5digest('REGISTER', self.settings.sip_uri)
+        r2: Response = await self.request(
+            f'REGISTER sip:{self.settings.sip_host}:{self.settings.sip_port} SIP/2.0',
+            f'Via: SIP/2.0/UDP {self.local_ip}:5060;rport;branch=__branch__',
+            f'CSeq: {self.cseq} REGISTER',
+            (
+                f'Authorization: Digest username="{self.settings.sip_username}", realm="{realm}", nonce="{nonce}", '
+                f'uri="{self.settings.sip_uri}", response="{md5digest(ha1, nonce, ha2)}", algorithm=MD5'
+            ),
+            *common_headers,
+        )
+        if r2.status != 200:
+            logger.warning('unexpected response to second REGISTER %s != 200', r2.status, extra={
+                'data': {'response': r2}
+            })
+            # TODO look at headers and decide how long to wait to retry
+        elif expires == 0:
+            logger.info('successfully un-registered')
+        else:
+            re_register = max(10, expires - 10)
+            logger.info('successfully registered, re-registering in %d seconds', re_register)
+            self.loop.call_later(re_register, lambda: self.loop.create_task(self.register(expires)))
 
     def protocol_factory(self):
         return SipProtocol(self)
@@ -151,88 +202,69 @@ class SipClient:
     def connection_made(self, transport):
         self.transport = transport
         self.local_ip, _ = transport.get_extra_info('sockname')
-        self.authenticate()
+        self.connected.set()
 
-    def authenticate(self):
-        self.auth_attempt = 0
-        self.authenticated = False
-        self.send(f"""\
-{AUTH_METHOD} sip:{self.settings.sip_host}:{self.settings.sip_port} SIP/2.0
-Via: SIP/2.0/UDP {self.local_ip}:5060;rport;branch={BRANCH}
-From: <sip:{self.settings.sip_username}@{self.settings.sip_host}:{self.settings.sip_port}>;tag=1269824498
-To: <sip:{self.settings.sip_username}@{self.settings.sip_host}:{self.settings.sip_port}>
-Call-ID: {self.call_id}
-CSeq: {self.cseq} {AUTH_METHOD}
-Contact: <sip:{self.settings.sip_username}@{self.local_ip};line=9ad550fb9d87b0f>
-Max-Forwards: 70
-User-Agent: TutorCruncher Address Book
-Expires: 3600
-Content-Length: 0""")
+    async def request(self, *req):
+        branch = 'z9hG4bK' + secrets.token_hex()[:16].upper()
+        self.futures = {branch: f for branch, f in self.futures.items() if not f.done()}
+        request_data = '\r\n'.join(req).replace('__branch__', branch) + '\r\n\r\n'
+        status, headers, response_data = await self._request(request_data, branch)
+        # debug(request_data, status, dict(headers))
+        return Response(status, headers, response_data, request_data)
 
-    def process_response(self, raw_data: bytes, addr):
+    def _request(self, data: str, branch: str):
+        self.transport.sendto(data.encode())
+        self.cseq += 1
+        f = asyncio.Future()
+        self.futures[branch] = f
+        return f
+
+    def process_datagram(self, raw_data: bytes, addr):
         if raw_data.startswith(b'\x00'):
             # ping from server, ignore
             return
         headers, data = raw_data.split(b'\r\n\r\n', 1)
         status, headers = parse_headers(headers)
-        status_code = int(status.get('status_code', 0))
-        if status_code == 401:
-            if self.auth_attempt > 1:
-                logger.error('repeated auth attempt')
+        if 'status_code' in status:
+            self.process_response(status, headers, data)
+        else:
+            self.process_request(status, headers, data)
+
+    def process_response(self, status, headers, data):
+        # match the response to the request
+        via = headers['Via']
+        m = FIND_BRANCH.search(via)
+        if m:
+            f = self.futures.get(m.groups()[0])
+            if f:
+                f.set_result((int(status['status_code']), headers, data))
                 return
-            self.auth_attempt += 1
-            auth = headers['WWW-Authenticate']
-            params = parse_digest(auth)
-            realm, nonce = params['realm'], params['nonce']
-            ha1 = md5digest(self.settings.sip_username, realm, self.settings.sip_password)
-            ha2 = md5digest(AUTH_METHOD, self.settings.sip_uri)
-            self.send(f"""\
-{AUTH_METHOD} sip:{self.settings.sip_host}:{self.settings.sip_port} SIP/2.0
-Via: SIP/2.0/UDP {self.local_ip}:5060;rport;branch={BRANCH}
-From: <sip:{self.settings.sip_username}@{self.settings.sip_host}:{self.settings.sip_port}>;tag=1269824498
-To: <sip:{self.settings.sip_username}@{self.settings.sip_host}:{self.settings.sip_port}>
-Call-ID: {self.call_id}
-CSeq: {self.cseq} {AUTH_METHOD}
-Contact: <sip:{self.settings.sip_username}@{self.local_ip};line=9ad550fb9d87b0f>
-Authorization: Digest username="{self.settings.sip_username}", realm="{realm}", nonce="{nonce}", \
-uri="{self.settings.sip_uri}", response="{md5digest(ha1, nonce, ha2)}", algorithm=MD5
-Max-Forwards: 70
-User-Agent: TutorCruncher Address Book
-Expires: 3600
-Content-Length: 0""")
-        elif not self.authenticated and status_code == 503:
-            logger.warning('503 while authenticating, retying in 8 seconds...', extra={
-                'data': {
-                    'status': status,
-                    'headers': headers,
-                    'data': try_decode(data),
-                }
-            })
-            self.loop.call_later(8, self.authenticate)
-        elif not self.authenticated and status_code == 200:
-            logger.info('authenticated successfully')
-            self.authenticated = True
-        elif status.get('method') == 'OPTIONS':
+        logger.warning('unable to find request future for response: %s', status, extra={
+            'data': {
+                'status': status,
+                'headers': headers,
+                'data': try_decode(data),
+            }
+        })
+
+    def process_request(self, status, headers, data):
+        method = status['method']
+        if method == 'OPTIONS':
             # don't care
             pass
-        elif status.get('method') == 'INVITE':
+        elif method == 'INVITE':
             n = time()
             if (n - self.last_invitation) > 1:
                 self.process_invite_request(headers)
             self.last_invitation = n
         else:
-            logger.warning('unknown datagram: %s', status, extra={
+            logger.warning('unknown request: %s', method, extra={
                 'data': {
                     'status': status,
                     'headers': headers,
                     'data': try_decode(data),
                 }
             })
-
-    def send(self, data):
-        data = (data.strip('\n ') + '\n\n').replace('\n', '\r\n').encode()
-        self.transport.sendto(data)
-        self.cseq += 1
 
     def process_invite_request(self, headers):
         from_header = headers['From']
@@ -246,19 +278,19 @@ Content-Length: 0""")
             })
         country = headers.get('X-Brand', None)
         logger.info(f'incoming call from %s%s', number, f' ({country})' if country else '')
-        self.db.record_call(number, country)
+        self.db.record_call(number, country or '-')
 
-    def close(self):
+    async def close(self):
+        logger.info('un-registering...')
+        await self.register(expires=0)
         self.transport.close()
-        self.loop.close()
 
 
 async def setup(settings, loop):
-    addr = settings.sip_host, settings.sip_port
     db = Database(settings, loop)
     await db.init()
     client = SipClient(settings, db, loop)
-    await loop.create_datagram_endpoint(client.protocol_factory, remote_addr=addr)
+    await client.init()
     return client
 
 
@@ -271,4 +303,6 @@ def main():
     except (KeyboardInterrupt, SystemExit):
         pass
     finally:
-        client.close()
+        print('')
+        loop.run_until_complete(client.close())
+        loop.close()
