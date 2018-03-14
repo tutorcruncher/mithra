@@ -1,0 +1,22 @@
+{
+  "name": "mithra",
+  "version": "0.0.1",
+  "description": "TutorCrunccher Mithra",
+  "main": "index.js",
+  "repository": "git@github.com:tutorcruncher/mithra.git",
+  "author": "Samuel Colvin <s@muelcolvin.com>",
+  "license": "MIT",
+  "private": false,
+  "dependencies": {
+    "react": "^16.2.0",
+    "react-app-rewired": "^1.5.0",
+    "react-dom": "^16.2.0",
+    "react-scripts": "1.1.1"
+  },
+  "scripts": {
+    "start": "react-app-rewired start",
+    "build": "react-app-rewired build",
+    "test": "react-app-rewired test --env=jsdom",
+    "eject": "react-app-rewired eject"
+  }
+}

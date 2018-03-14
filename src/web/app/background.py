@@ -12,8 +12,8 @@ class Background:
         self.task = loop.create_task(self._run())
         self.websockets = set()
 
-    async def add_ws(self, ws):
-        self.websockets.add((id, ws))
+    def add_ws(self, ws):
+        self.websockets.add(ws)
 
     def remove_ws(self, ws):
         try:

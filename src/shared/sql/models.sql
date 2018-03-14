@@ -32,3 +32,4 @@ CREATE TABLE calls (
   country VARCHAR(31),
   ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
+CREATE INDEX call_ts ON calls USING btree (ts);
