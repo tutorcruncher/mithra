@@ -1,6 +1,5 @@
 #!/usr/bin/env python3.6
 import asyncio
-import logging
 import logging.config
 import sys
 from pathlib import Path
@@ -52,7 +51,6 @@ if __name__ == '__main__':
     elif 'patch' in sys.argv:
         print('running patch...')
         args = list(sys.argv)
-        print(args)
         live = '--live' in args
         if live:
             args.remove('--live')

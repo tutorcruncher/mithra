@@ -75,7 +75,7 @@ async def prepare_database(settings: PgSettings, overwrite_existing: bool) -> bo
     try:
         logger.debug('creating tables from model definition...')
         async with conn.transaction():
-            await conn.execute(settings.models_sql)
+            await conn.execute(settings.models_sql + '\n' + settings.logic_sql)
     finally:
         await conn.close()
     logger.info('database successfully setup ✓')

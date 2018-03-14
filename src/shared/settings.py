@@ -29,4 +29,8 @@ class PgSettings(BaseSettings):
 
     @property
     def models_sql(self):
-        return (THIS_DIR / 'models.sql').read_text()
+        return (THIS_DIR / 'sql' / 'models.sql').read_text()
+
+    @property
+    def logic_sql(self):
+        return (THIS_DIR / 'sql' / 'logic.sql').read_text()

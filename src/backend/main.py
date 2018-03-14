@@ -31,8 +31,8 @@ REALM_REGEX = re.compile('realm="(.+?)"')
 NONCE_REGEX = re.compile('nonce="(.+?)"')
 RESPONSE_DECODE = re.compile(r'SIP/2.0 (?P<status_code>[0-9]{3}) (?P<status_message>.+)')
 REQUEST_DECODE = re.compile(r'(?P<method>[A-Za-z]+) (?P<to_uri>.+) SIP/2.0')
-NUMBER = re.compile(r'sip:(\d+)@')
 FIND_BRANCH = re.compile(r'branch=(.+?);')
+NUMBER = re.compile(r'sip:(\d+)@')
 
 
 class Response(NamedTuple):
@@ -86,17 +86,11 @@ class Database:
         self.tasks.append(self._loop.create_task(self._record_call(number, country)))
 
     async def _record_call(self, number, country):
-        async with self._pg.acquire() as conn:
-            # TODO get other info
-            await conn.execute('INSERT INTO calls (number, country) VALUES ($1, $2)', number, country)
-            data = json.dumps({
-                'number': number,
-                'country': country,
-            })
-            await conn.execute("SELECT pg_notify('call', $1::text)", data)
+        number = number.replace(' ', '').upper()
+        await self._pg.execute('INSERT INTO calls (number, country) VALUES ($1, $2)', number, country)
 
     async def close(self):
-        await asyncio.gather(self.tasks)
+        await asyncio.gather(*self.tasks)
         await self._pg.close()
 
 
@@ -137,7 +131,8 @@ class SipClient:
         self.call_id = secrets.token_hex()[:10]
         self.last_invitation = 0
         self.connected = asyncio.Event()
-        self.futures = {}
+        self.request_lock = asyncio.Lock()
+        self.request_future = None
 
     async def init(self):
         addr = self.settings.sip_host, self.settings.sip_port
@@ -206,18 +201,18 @@ class SipClient:
 
     async def request(self, *req):
         branch = 'z9hG4bK' + secrets.token_hex()[:16].upper()
-        self.futures = {branch: f for branch, f in self.futures.items() if not f.done()}
         request_data = '\r\n'.join(req).replace('__branch__', branch) + '\r\n\r\n'
-        status, headers, response_data = await self._request(request_data, branch)
+        async with self.request_lock:
+            status, headers, response_data = await self._request(request_data)
         # debug(request_data, status, dict(headers))
+        self.request_future = None
         return Response(status, headers, response_data, request_data)
 
-    def _request(self, data: str, branch: str):
+    def _request(self, data: str):
         self.transport.sendto(data.encode())
         self.cseq += 1
-        f = asyncio.Future()
-        self.futures[branch] = f
-        return f
+        self.request_future = asyncio.Future()
+        return self.request_future
 
     def process_datagram(self, raw_data: bytes, addr):
         if raw_data.startswith(b'\x00'):
@@ -231,21 +226,16 @@ class SipClient:
             self.process_request(status, headers, data)
 
     def process_response(self, status, headers, data):
-        # match the response to the request
-        via = headers['Via']
-        m = FIND_BRANCH.search(via)
-        if m:
-            f = self.futures.get(m.groups()[0])
-            if f:
-                f.set_result((int(status['status_code']), headers, data))
-                return
-        logger.warning('unable to find request future for response: %s', status, extra={
-            'data': {
-                'status': status,
-                'headers': headers,
-                'data': try_decode(data),
-            }
-        })
+        if self.request_future:
+            self.request_future.set_result((int(status['status_code']), headers, data))
+        else:
+            logger.warning('no request future for response: %s', status, extra={
+                'data': {
+                    'status': status,
+                    'headers': headers,
+                    'data': try_decode(data),
+                }
+            })
 
     def process_request(self, status, headers, data):
         method = status['method']
@@ -278,12 +268,13 @@ class SipClient:
             })
         country = headers.get('X-Brand', None)
         logger.info(f'incoming call from %s%s', number, f' ({country})' if country else '')
-        self.db.record_call(number, country or '-')
+        self.db.record_call(number, country)
 
     async def close(self):
         logger.info('un-registering...')
         await self.register(expires=0)
         self.transport.close()
+        await self.db.close()
 
 
 async def setup(settings, loop):

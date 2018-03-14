@@ -46,7 +46,7 @@ async def _run_patch(settings, live, patch_func):
     await tr.start()
     print('=' * 40)
     try:
-        await patch_func(conn)
+        await patch_func(conn, settings=settings, live=live)
     except BaseException as e:
         print('=' * 40)
         await tr.rollback()
@@ -64,7 +64,7 @@ async def _run_patch(settings, live, patch_func):
 
 
 @patch
-async def print_tables(conn):
+async def print_tables(conn, **kwargs):
     """
     print names of all tables
     """
@@ -91,3 +91,11 @@ async def print_tables(conn):
                 field.append(f'DEFAULT {dft}')
             fields.append(' '.join(field))
         print('{} (\n  {}\n)\n'.format(table_name, '\n  '.join(fields)))
+
+
+@patch
+async def run_logic_sql(conn, settings, **kwargs):
+    """
+    run logic.sql code.
+    """
+    await conn.execute(settings.logic_sql)
