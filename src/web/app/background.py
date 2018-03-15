@@ -1,15 +1,32 @@
 import asyncio
 import logging
 
+from .settings import Settings
+
 logger = logging.getLogger('mithra.web.background')
 
 
-class Background:
+class _Worker:
     def __init__(self, app):
         self.app = app
+        self.settings: Settings = app['settings']
         self.running = True
         loop = asyncio.get_event_loop()
-        self.task = loop.create_task(self._run())
+        self.task = loop.create_task(self.run())
+
+    async def run(self):
+        raise NotImplementedError()
+
+    async def close(self):
+        logger.info('closing web background task')
+        self.running = False
+        await self.task
+        self.task.result()
+
+
+class WebsocketPropagator(_Worker):
+    def __init__(self, app):
+        super().__init__(app)
         self.websockets = set()
 
     def add_ws(self, ws):
@@ -21,13 +38,7 @@ class Background:
         except KeyError:
             pass
 
-    async def close(self):
-        logger.info('closing web background task')
-        self.running = False
-        await self.task
-        self.task.result()
-
-    async def _run(self):
+    async def run(self):
         pending_futures = set()
 
         def on_event(conn, pid, channel, payload):
@@ -56,3 +67,26 @@ class Background:
             except (RuntimeError, AttributeError):
                 logger.info(' ws "%s" closed, removing', ws)
                 self.remove_ws(ws)
+
+
+class Downloader(_Worker):
+    FREQ = 3600
+    ERROR_FREQ = 60
+
+    async def download(self):
+        logger.info('running intercom download')
+
+    async def run(self):
+        while True:
+            try:
+                await self.download()
+            except Exception as e:
+                logger.exception('Error running intercom downloader: %s', e)
+                wait = self.ERROR_FREQ
+            else:
+                wait = self.FREQ
+
+            for i in range(wait):
+                await asyncio.sleep(1)
+                if not self.running:
+                    return

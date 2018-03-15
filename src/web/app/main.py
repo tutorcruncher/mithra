@@ -1,3 +1,4 @@
+import asyncio
 import base64
 import os
 import re
@@ -10,7 +11,7 @@ from aiohttp_session.cookie_storage import EncryptedCookieStorage
 
 from shared.db import prepare_database
 
-from .background import Background
+from .background import Downloader, WebsocketPropagator
 from .middleware import auth_middleware, error_middleware
 from .settings import THIS_DIR, Settings
 from .views import (call_details, companies, company_details, index, main_ws, people, person_details,
@@ -22,12 +23,16 @@ async def startup(app: web.Application):
     await prepare_database(settings, False)
     app.update(
         pg=await asyncpg.create_pool(dsn=settings.pg_dsn),
-        background=Background(app),
+        ws_propagator=WebsocketPropagator(app),
+        downloader=Downloader(app),
     )
 
 
 async def cleanup(app: web.Application):
-    await app['background'].close()
+    await asyncio.gather(
+        app['ws_propagator'].close(),
+        app['downloader'].close(),
+    )
     await app['pg'].close()
 
 

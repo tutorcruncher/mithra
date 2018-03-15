@@ -45,6 +45,7 @@ class Calls extends Component {
     this.run_ws = this.run_ws.bind(this)
     this.on_message = this.on_message.bind(this)
     this.update_calls = this.update_calls.bind(this)
+    this.first_msg = true
   }
 
   componentDidMount () {
@@ -87,7 +88,8 @@ class Calls extends Component {
   }
 
   on_message (event) {
-    notify()
+    this.first_msg && notify()
+    this.first_msg = false
     this.props.setRootState({status: 'online'})
     const data = JSON.parse(event.data)
     const new_call = !Array.isArray(data)

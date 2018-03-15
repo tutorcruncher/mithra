@@ -64,14 +64,14 @@ async def main_ws(request):
 
     json_str = await request.app['pg'].fetchval(calls_sql)
     await ws.send_str(json_str or '[]')
-    request.app['background'].add_ws(ws)
+    request.app['ws_propagator'].add_ws(ws)
     try:
         async for msg in ws:
             logger.info('ws message:', msg)
             if msg.tp == WSMsgType.ERROR:
                 logger.warning('ws connection closed with exception %s', ws.exception())
     finally:
-        request.app['background'].remove_ws(ws)
+        request.app['ws_propagator'].remove_ws(ws)
     return ws
 
 

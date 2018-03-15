@@ -2,6 +2,9 @@ import logging
 import os
 import sys
 
+from raven import Client
+from raven_aiohttp import AioHttpTransport
+
 
 def setup_logging():
     """
@@ -30,6 +33,7 @@ def setup_logging():
             'sentry': {
                 'level': 'WARNING',
                 'class': 'raven.handlers.logging.SentryHandler',
+                'client': Client(transport=AioHttpTransport),
                 'dsn': raven_dsn,
                 'release': os.getenv('COMMIT', None),
                 'name': os.getenv('SERVER_NAME', '-')
