@@ -1,3 +1,4 @@
+import base64
 import os
 import re
 from html import escape
@@ -5,11 +6,14 @@ from html import escape
 import asyncpg
 from aiohttp import web
 
-from shared.db import prepare_database
+from aiohttp_session import setup
+from aiohttp_session.cookie_storage import EncryptedCookieStorage
 
+from shared.db import prepare_database
 from .background import Background
+from .middleware import middleware
 from .settings import THIS_DIR, Settings
-from .views import index, main_ws
+from .views import index, main_ws, signin_with_google
 
 
 async def startup(app: web.Application):
@@ -27,14 +31,18 @@ async def cleanup(app: web.Application):
 
 
 def setup_routes(app):
-    app.router.add_get('/', index, name='index')
-    app.router.add_get('/ws/', main_ws, name='ws')
+    app.router.add_get('/api/', index, name='index')
+    app.router.add_get('/api/ws/', main_ws, name='ws')
+    app.router.add_post('/api/signin/', signin_with_google, name='signin')
 
 
 def create_app(*, settings: Settings=None):
-    app = web.Application()
+    app = web.Application(middlewares=middleware)
     settings = settings or Settings()
     app['settings'] = settings
+
+    secret_key = base64.urlsafe_b64decode(settings.auth_key)
+    setup(app, EncryptedCookieStorage(secret_key, cookie_name='mithra', domain='localhost:3000'))
 
     ctx = dict(
         COMMIT=os.getenv('COMMIT', '-'),

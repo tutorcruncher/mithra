@@ -1,6 +1,8 @@
 import React, { Component } from 'react'
 import {Link} from 'react-router-dom'
 import format from 'date-fns/format'
+import {make_url} from '../utils'
+import Error from './Error'
 
 const notify = async (msg) => {
   if (!('Notification' in window)) {
@@ -42,9 +44,10 @@ class Calls extends Component {
     super(props)
     this.state = {
       calls: [],
-      error: null
+      error: null,
     }
     this.run_ws = this.run_ws.bind(this)
+    this.on_message = this.on_message.bind(this)
     this.update_calls = this.update_calls.bind(this)
   }
 
@@ -55,15 +58,12 @@ class Calls extends Component {
   }
 
   run_ws () {
-    let ws_url = process.env.REACT_APP_WS_URL
-    if (ws_url.startsWith('/')) {
-      ws_url = window.location.origin.replace('http', 'ws') + ws_url
-    }
+    let ws_url = make_url('/ws/').replace('http', 'ws')
     let socket
     try {
       socket = new WebSocket(ws_url)
     } catch (err) {
-      this.setState({error: `WebSocket connection error: ${err}`})
+      this.setState({error: err})
       return
     }
 
@@ -72,10 +72,15 @@ class Calls extends Component {
     }
 
     socket.onclose = e => {
-      console.log('websocket closed, reconnecting in 5 seconds', e)
-      this.props.setRootState({status: 'offline'})
-      this.setState({calls: []})
-      setTimeout(this.run_ws, 5000)
+      if (e.code === 4403) {
+        console.log('not authenticated', e)
+        this.props.setRootState({auth: false})
+      } else {
+        console.log('websocket closed, reconnecting in 5 seconds', e)
+        this.props.setRootState({status: 'offline'})
+        this.setState({calls: []})
+        setTimeout(this.run_ws, 5000)
+      }
     }
 
     socket.onerror = e => {
@@ -83,30 +88,32 @@ class Calls extends Component {
       this.setState({error: `WebSocket error`})
     }
 
-    socket.onmessage = e => {
-      this.props.setRootState({status: 'online'})
-      const data = JSON.parse(e.data)
-      const new_call = !Array.isArray(data)
-      this.setState({error: null})
-      this.update_calls(new_call ? [data].concat(this.state.calls) : data)
-      if (new_call) {
-        let msg = 'Incoming call from '
-        if (data.person_name) {
-          msg += data.person_name
-          if (data.company) {
-            msg += ` (${data.company})`
-          }
-          msg += ' on '
+    socket.onmessage = this.on_message
+  }
+
+  on_message (event) {
+    this.props.setRootState({status: 'online'})
+    const data = JSON.parse(event.data)
+    const new_call = !Array.isArray(data)
+    this.setState({error: null})
+    this.update_calls(new_call ? [data].concat(this.state.calls) : data)
+    if (new_call) {
+      let msg = 'Incoming call from '
+      if (data.person_name) {
+        msg += data.person_name
+        if (data.company) {
+          msg += ` (${data.company})`
         }
-        msg += data.number
-        if (data.country) {
-            msg += ` (${data.country})`
-        }
-        notify(msg)
+        msg += ' on '
       }
-      // to change new where applicable
-      setTimeout(() => this.update_calls(), NEW_TIME + 100)
+      msg += data.number
+      if (data.country) {
+          msg += ` (${data.country})`
+      }
+      notify(msg)
     }
+    // to change new where applicable
+    setTimeout(() => this.update_calls(), NEW_TIME + 100)
   }
 
   update_calls (calls) {
@@ -123,12 +130,7 @@ class Calls extends Component {
 
   render () {
     if (this.state.error) {
-      return (
-        <div>
-          <h3>Error:</h3>
-          <p>{this.state.error}</p>
-        </div>
-      )
+      return <Error error={this.state.error}/>
     }
     return (
       <ul className="list-group py-3 mx-0">

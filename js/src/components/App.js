@@ -1,7 +1,8 @@
 import React, { Component } from 'react'
-import {Link, Route, Switch, withRouter} from 'react-router-dom'
+import {Link, Redirect, Route, Switch, withRouter} from 'react-router-dom'
 import Calls from './Calls'
 import StatusBar from './StatusBar'
+import SignIn from './SignIn'
 
 class _App extends Component {
   constructor (props) {
@@ -9,6 +10,7 @@ class _App extends Component {
     this.state = {
       nav_title: null,
       status: null,
+      auth: null,
     }
   }
 
@@ -23,6 +25,12 @@ class _App extends Component {
   }
 
   render () {
+    if (this.props.history.location.pathname !== '/signin/' && this.state.auth === false) {
+      return <Redirect to={{
+        pathname: '/signin/',
+        state: {from: this.props.location}
+      }}/>
+    }
     return (
       <div>
         <nav className="navbar navbar-expand-lg navbar-light fixed-top">
@@ -43,6 +51,15 @@ class _App extends Component {
           <Switch>
             <Route exact path="/" render={props => (
               <Calls history={props.history} setRootState={s => this.setState(s)}/>
+            )}/>
+            <Route exact path="/signin/" render={props => (
+              <SignIn history={props.history} setRootState={s => this.setState(s)}/>
+            )}/>
+            <Route render={props => (
+              <div className="box">
+                <h3>Page not found</h3>
+                <p>The page "{props.location.pathname}" doesn't exist.</p>
+              </div>
             )}/>
           </Switch>
         </div>

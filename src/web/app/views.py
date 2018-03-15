@@ -1,8 +1,12 @@
 import logging
+from time import time
 
 from aiohttp import WSMsgType
 from aiohttp.web import Response
 from aiohttp.web_ws import WebSocketResponse
+from aiohttp_session import get_session
+
+from .utils import JsonErrors, json_response, google_get_details
 
 logger = logging.getLogger('mithra.web')
 
@@ -23,21 +27,34 @@ FROM (
   LIMIT 100
 ) t;
 """
+TWO_WEEKS = 3600 * 24 * 7 * 2
+
+
+async def signin_with_google(request):
+    data = await request.json()
+    try:
+        details = await google_get_details(request.app['settings'], data['id_token'])
+    except (KeyError, ValueError) as e:
+        logger.exception('error parsing google sso token: %s', e)
+        raise JsonErrors.HTTPBadRequest(text='invalid token')
+    session = await get_session(request)
+    debug(session)
+    session['expires'] = int(time()) + TWO_WEEKS
+    session['user'] = details
+    return json_response(request, status='ok', details=details)
 
 
 async def main_ws(request):
     ws = WebSocketResponse()
 
-    # cookie = request.cookies.get(request.app['settings'].cookie_name, '')
-    # try:
-    #     token = request.app['session_fernet'].decrypt(cookie.encode())
-    # except InvalidToken:
-    #     await ws.prepare(request)
-    #     await ws.close(code=4403)
-    #     return ws
-    session = 'anon'
-    # logger.info('ws connection %s', session)
+    session = await get_session(request)
+    debug(session)
+    expires = session.get('expires', 0)
     await ws.prepare(request)
+    if expires < time():
+        await ws.close(code=4403)
+        return ws
+
     json_str = await request.app['pg'].fetchval(calls_sql)
     await ws.send_str(json_str or '[]')
     request.app['background'].add_ws(ws)
@@ -47,6 +64,5 @@ async def main_ws(request):
             if msg.tp == WSMsgType.ERROR:
                 logger.warning('ws connection closed with exception %s', ws.exception())
     finally:
-        # logger.info('ws disconnection %s', session)
         request.app['background'].remove_ws(ws)
     return ws
