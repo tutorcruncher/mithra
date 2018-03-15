@@ -25,11 +25,9 @@ class _App extends Component {
   render () {
     return (
       <div>
-        <nav className="navbar navbar-expand-lg navbar-light">
+        <nav className="navbar navbar-expand-lg navbar-light fixed-top">
           <div className="container">
-
             <Link className="navbar-brand" to="/">Mithra</Link>
-
             <ul className="navbar-nav mr-auto">
               <li className="nav-item">
                 <Link className="nav-link" to="/people/">People</Link>

@@ -1,5 +1,6 @@
 import React, { Component } from 'react'
 import {Link} from 'react-router-dom'
+import format from 'date-fns/format'
 
 const notify = async (msg) => {
   if (!('Notification' in window)) {
@@ -14,6 +15,28 @@ const notify = async (msg) => {
   }
 }
 
+const DTF = 'HH:mm DD/MM/YYYY'
+export const format_ts = ts => format(new Date(ts), DTF)
+const NEW_TIME = 3000
+
+const Call = ({call}) => {
+  return (
+    <li className={'list-group-item call-list ' + (call.new ? ' new-call': '')}>
+      <Link to={`/call/${call.id}/`} className="d-flex justify-content-between call-link">
+        <div>
+          <h6 className="my-0">{call.number}</h6>
+          <small className="text-muted">
+            {call.person_name}
+            {call.company && <span> ({call.company})</span>}
+            &nbsp;
+            </small>
+        </div>
+        <span className="float-right text-muted">{format_ts(call.ts)}</span>
+      </Link>
+    </li>
+  )
+}
+
 class Calls extends Component {
   constructor (props) {
     super(props)
@@ -22,6 +45,7 @@ class Calls extends Component {
       error: null
     }
     this.run_ws = this.run_ws.bind(this)
+    this.update_calls = this.update_calls.bind(this)
   }
 
   componentDidMount () {
@@ -63,13 +87,9 @@ class Calls extends Component {
       this.props.setRootState({status: 'online'})
       const data = JSON.parse(e.data)
       const new_call = !Array.isArray(data)
-      this.setState({
-        calls: new_call ? [data].concat(this.state.calls) : data
-      })
+      this.setState({error: null})
+      this.update_calls(new_call ? [data].concat(this.state.calls) : data)
       if (new_call) {
-        this.setState({
-          calls: [data].concat(this.state.calls)
-        })
         let msg = 'Incoming call from '
         if (data.person_name) {
           msg += data.person_name
@@ -84,7 +104,21 @@ class Calls extends Component {
         }
         notify(msg)
       }
+      // to change new where applicable
+      setTimeout(() => this.update_calls(), NEW_TIME + 100)
     }
+  }
+
+  update_calls (calls) {
+    const now = new Date()
+    calls = calls || this.state.calls
+    this.setState({
+      calls: calls.map(c => {
+        const age = now - new Date(c.ts)
+        c.new = age < NEW_TIME
+        return c
+      })
+    })
   }
 
   render () {
@@ -99,19 +133,7 @@ class Calls extends Component {
     return (
       <ul className="list-group py-3 mx-0">
         {this.state.calls.map((call, i) => (
-          <li key={i} className="list-group-item">
-            <Link to={`/call/${call.id}/`} className="d-flex justify-content-between list-link">
-              <div>
-                <h6 className="my-0">{call.number}</h6>
-                <small className="text-muted">
-                  {call.person_name}
-                  {call.company && <span> ({call.company})</span>}
-                  &nbsp;
-                  </small>
-              </div>
-              <span className="text-muted float-right">{call.ts}</span>
-            </Link>
-          </li>
+          <Call key={i} call={call}/>
         ))}
       </ul>
     )

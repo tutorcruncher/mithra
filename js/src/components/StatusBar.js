@@ -71,7 +71,7 @@ class StatusBar extends Component {
       online: 'Online',
     }
     return (
-      <div className={`status ${this.props.status || 'anon'}`}>
+      <div className={`status fixed-top ${this.props.status || 'anon'}`}>
         <div className="back"/>
         <div className="container d-flex justify-content-between">
           <span>

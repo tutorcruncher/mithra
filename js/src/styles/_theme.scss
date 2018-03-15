@@ -1,10 +1,14 @@
 @import 'variables';
 
 body {
-  //padding-top: 7rem;
+  padding-top: 6rem;
   background-color: $background;
   padding-bottom: 3rem;
-  //overflow-y: scroll;
+}
+
+.navbar {
+  background: $background;
+  height: 3.4rem;
 }
 
 @mixin stripes($colour1, $lighten) {
@@ -18,6 +22,7 @@ body {
 }
 
 .status {
+  top: 3.4rem;
   height: 33px;
   color: white;
   .back {
@@ -39,6 +44,24 @@ body {
   }
 }
 
-.list-link {
+.call-link {
   text-decoration: none !important;
+  color: black;
+}
+
+.call-list {
+  color: black;
+  &, .call-link, .call-link .text-muted {
+    transition: all 0.5s;
+  }
+
+  &.new-call {
+    background: $success;
+    .call-link {
+      color: white;
+      .text-muted {
+        color:white !important;
+      }
+    }
+  }
 }
