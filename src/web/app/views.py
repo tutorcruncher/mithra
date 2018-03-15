@@ -6,7 +6,7 @@ from aiohttp.web import Response
 from aiohttp.web_ws import WebSocketResponse
 from aiohttp_session import get_session
 
-from .utils import JsonErrors, json_response, google_get_details, raw_json_response
+from .utils import JsonErrors, google_get_details, json_response, raw_json_response
 
 logger = logging.getLogger('mithra.web')
 TWO_WEEKS = 3600 * 24 * 7 * 2
@@ -114,8 +114,8 @@ call_details_sql = """
 SELECT row_to_json(t)
 FROM (
   SELECT c.id AS id, c.number AS number, c.country AS country, c.ts AS ts,
-  p.id AS person_id, p.name AS person_name, p.last_seen AS person_last_seen, p.details AS person_details, 
-  c2.id AS company_id, c2.name AS company_name, c2.login_url AS company_login_url, 
+  p.id AS person_id, p.name AS person_name, p.last_seen AS person_last_seen, p.details AS person_details,
+  c2.id AS company_id, c2.name AS company_name, c2.login_url AS company_login_url,
   c2.created AS company_created, c2.details AS company_details
   FROM calls AS c
   LEFT JOIN people AS p ON c.person = p.id

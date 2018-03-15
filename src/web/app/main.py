@@ -5,25 +5,16 @@ from html import escape
 
 import asyncpg
 from aiohttp import web
-
 from aiohttp_session import session_middleware
 from aiohttp_session.cookie_storage import EncryptedCookieStorage
 
 from shared.db import prepare_database
+
 from .background import Background
-from .middleware import error_middleware, auth_middleware
+from .middleware import auth_middleware, error_middleware
 from .settings import THIS_DIR, Settings
-from .views import (
-    call_details,
-    companies,
-    company_details,
-    index,
-    main_ws,
-    people,
-    person_details,
-    signin_with_google,
-    signout,
-)
+from .views import (call_details, companies, company_details, index, main_ws, people, person_details,
+                    signin_with_google, signout)
 
 
 async def startup(app: web.Application):
