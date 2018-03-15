@@ -12,6 +12,7 @@ CREATE OR REPLACE FUNCTION fill_call() RETURNS trigger AS $$
     RETURN NEW;
   END;
 $$ LANGUAGE plpgsql;
+DROP TRIGGER IF EXISTS calls_insert on calls;
 DROP TRIGGER IF EXISTS before_calls_insert on calls;
 CREATE TRIGGER before_calls_insert BEFORE INSERT ON calls FOR EACH ROW EXECUTE PROCEDURE fill_call();
 

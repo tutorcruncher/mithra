@@ -42,20 +42,28 @@ def check():
 if __name__ == '__main__':
     setup_logging()
     settings = Settings()
-    if 'check' in sys.argv:
+    try:
+        _, command, *args = sys.argv
+    except ValueError:
+        print('no command provided, options are: "check", "reset_database", "patch" or "web"')
+        sys.exit(1)
+
+    if command == 'check':
         print('running check...')
         check()
-    elif 'reset_database' in sys.argv:
+    elif command == 'reset_database':
         print('running reset_database...')
         reset_database(settings)
-    elif 'patch' in sys.argv:
+    elif command == 'patch':
         print('running patch...')
-        args = list(sys.argv)
         live = '--live' in args
         if live:
             args.remove('--live')
-        run_patch(settings, live, args[-1])
-    else:
+        run_patch(settings, live, args[0] if args else None)
+    elif command == 'web':
         print('running web server...')
         app = create_app(settings=settings)
         web.run_app(app, port=8000, shutdown_timeout=1, access_log=None, print=lambda *args: None)
+    else:
+        print(f'unknown command "{command}"')
+        sys.exit(1)
