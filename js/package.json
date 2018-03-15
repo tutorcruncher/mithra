@@ -8,6 +8,16 @@
   "license": "MIT",
   "private": false,
   "homepage": "/",
+  "proxy": {
+    "/api": {
+      "target": "http://localhost:8000/",
+      "ws": false
+    },
+    "/api/ws/": {
+      "target": "http://localhost:8000/",
+      "ws": true
+    }
+  },
   "engines": {
     "node": "8.x",
     "npm": "5.x",

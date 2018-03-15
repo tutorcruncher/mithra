@@ -6,14 +6,21 @@ from html import escape
 import asyncpg
 from aiohttp import web
 
-from aiohttp_session import setup
+from aiohttp_session import session_middleware
 from aiohttp_session.cookie_storage import EncryptedCookieStorage
 
 from shared.db import prepare_database
 from .background import Background
-from .middleware import middleware
+from .middleware import error_middleware, auth_middleware
 from .settings import THIS_DIR, Settings
-from .views import index, main_ws, signin_with_google
+from .views import (
+    companies,
+    index,
+    main_ws,
+    people,
+    signin_with_google,
+    signout,
+)
 
 
 async def startup(app: web.Application):
@@ -33,16 +40,23 @@ async def cleanup(app: web.Application):
 def setup_routes(app):
     app.router.add_get('/api/', index, name='index')
     app.router.add_get('/api/ws/', main_ws, name='ws')
+    app.router.add_get('/api/people/', people, name='people')
+    app.router.add_get('/api/companies/', companies, name='companies')
+
     app.router.add_post('/api/signin/', signin_with_google, name='signin')
+    app.router.add_post('/api/signout/', signout, name='signout')
 
 
 def create_app(*, settings: Settings=None):
-    app = web.Application(middlewares=middleware)
     settings = settings or Settings()
-    app['settings'] = settings
 
     secret_key = base64.urlsafe_b64decode(settings.auth_key)
-    setup(app, EncryptedCookieStorage(secret_key, cookie_name='mithra', domain='localhost:3000'))
+    app = web.Application(middlewares=(
+        error_middleware,
+        session_middleware(EncryptedCookieStorage(secret_key, cookie_name='mithra')),
+        auth_middleware,
+    ))
+    app['settings'] = settings
 
     ctx = dict(
         COMMIT=os.getenv('COMMIT', '-'),

@@ -2,12 +2,12 @@
 
 body {
   padding-top: 6rem;
-  background-color: $background;
+  background-color: $light;
   padding-bottom: 3rem;
+  overflow-y: scroll;
 }
 
 .navbar {
-  background: $background;
   height: 3.4rem;
 }
 

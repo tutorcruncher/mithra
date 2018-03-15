@@ -1,6 +1,6 @@
 import React, { Component } from 'react'
 import {Redirect} from 'react-router-dom'
-import {load_script, request} from '../utils'
+import {load_script} from '../utils'
 import Error from './Error'
 
 class SignIn extends Component {
@@ -18,7 +18,6 @@ class SignIn extends Component {
     this.props.setRootState({nav_title: 'Sign In', status: 'anon'})
     await load_script('https://apis.google.com/js/platform.js')
     window.gapi.load('auth2', () => {
-      console.log('auth2')
       this.gauth = window.gapi.auth2.init({
         client_id: process.env.REACT_APP_GOOGLE_SIW_CLIENT_KEY,
         hosted_domain: 'tutorcruncher.com',
@@ -31,7 +30,7 @@ class SignIn extends Component {
   async sign_in () {
     try {
       await this.gauth.signIn()
-      await request('/signin/', {id_token: this.gauth.currentUser.get().getAuthResponse().id_token}, 'POST')
+      await this.props.requests.post('/signin/', {id_token: this.gauth.currentUser.get().getAuthResponse().id_token})
       this.props.setRootState({auth: true})
       this.setState({logged_in: true})
     }  catch (err) {

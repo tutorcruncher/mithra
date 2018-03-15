@@ -1,7 +1,6 @@
 import React, { Component } from 'react'
 import {Link} from 'react-router-dom'
-import format from 'date-fns/format'
-import {make_url} from '../utils'
+import {make_url, format_ts} from '../utils'
 import Error from './Error'
 
 const notify = async (msg) => {
@@ -16,9 +15,6 @@ const notify = async (msg) => {
     }
   }
 }
-
-const DTF = 'HH:mm DD/MM/YYYY'
-export const format_ts = ts => format(new Date(ts), DTF)
 const NEW_TIME = 3000
 
 const Call = ({call}) => {
@@ -52,7 +48,6 @@ class Calls extends Component {
   }
 
   componentDidMount () {
-    notify()
     this.props.setRootState({nav_title: 'Calls', status: 'loading'})
     this.run_ws()
   }
@@ -92,6 +87,7 @@ class Calls extends Component {
   }
 
   on_message (event) {
+    notify()
     this.props.setRootState({status: 'online'})
     const data = JSON.parse(event.data)
     const new_call = !Array.isArray(data)

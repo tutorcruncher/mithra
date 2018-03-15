@@ -1,4 +1,5 @@
 import logging
+from time import time
 
 from aiohttp.web_exceptions import HTTPException, HTTPInternalServerError
 from aiohttp.web_middlewares import middleware
@@ -71,15 +72,8 @@ async def auth_middleware(request, handler):
         session = await get_session(request)
         if not session:
             raise JsonErrors.HTTPForbidden(status='not authenticated')
-        debug(session)
-        # if company:
-        #     await authenticate(request, company.private_key.encode())
-        # else:
-        #     await authenticate(request)
+
+        expires = session.get('expires', 0)
+        if expires < time():
+            raise JsonErrors.HTTPForbidden(status=f'session expired: {expires}')
     return await handler(request)
-
-
-middleware = (
-    error_middleware,
-    auth_middleware
-)

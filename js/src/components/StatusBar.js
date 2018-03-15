@@ -7,6 +7,7 @@ class StatusBar extends Component {
       offline: 'Offline',
       online: 'Online',
       anon: ' ',
+      ok: ' '
     }
     return (
       <div className={`status fixed-top ${this.props.status || 'anon'}`}>

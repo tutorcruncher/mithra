@@ -42,7 +42,6 @@ async def google_get_details(settings: Settings, id_token):
 
 
 JSON_CONTENT_TYPE = 'application/json'
-ACCESS_CONTROL_HEADERS = {'Access-Control-Allow-Origin': '*'}
 
 
 def isoformat(o):
@@ -77,6 +76,14 @@ def pretty_json(data):
     return json.dumps(data, indent=2) + '\n'
 
 
+def raw_json_response(json_str, status_=200):
+    return Response(
+        body=json_str.encode(),
+        status=status_,
+        content_type=JSON_CONTENT_TYPE,
+    )
+
+
 def json_response(request, *, status_=200, list_=None, **data):
     if JSON_CONTENT_TYPE in request.headers.get('Accept', ''):
         to_json = json.dumps
@@ -87,7 +94,6 @@ def json_response(request, *, status_=200, list_=None, **data):
         body=to_json(data if list_ is None else list_).encode(),
         status=status_,
         content_type=JSON_CONTENT_TYPE,
-        headers=ACCESS_CONTROL_HEADERS,
     )
 
 
@@ -97,7 +103,6 @@ class JsonErrors:
             super().__init__(
                 text=pretty_lenient_json(data),
                 content_type=JSON_CONTENT_TYPE,
-                headers=ACCESS_CONTROL_HEADERS,
             )
 
     class HTTPBadRequest(_HTTPClientErrorJson):
