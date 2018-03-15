@@ -11,8 +11,8 @@ FROM (
   SELECT c.number AS number, c.country AS country, c.ts AS ts,
   p.id AS person_id, p.name AS person_name, c2.name AS company
   FROM calls AS c
-  JOIN people p ON c.person = p.id
-  JOIN companies c2 ON p.company = c2.id
+  LEFT JOIN people p ON c.person = p.id
+  LEFT JOIN companies c2 ON p.company = c2.id
   ORDER BY c.ts DESC
   LIMIT 100
 ) t;
@@ -30,7 +30,7 @@ async def main_ws(request):
     #     await ws.close(code=4403)
     #     return ws
     session = 'anon'
-    logger.info('ws connection %s', session)
+    # logger.info('ws connection %s', session)
     await ws.prepare(request)
     json_str = await request.app['pg'].fetchval(calls_sql)
     await ws.send_str(json_str or '[]')
@@ -41,6 +41,6 @@ async def main_ws(request):
             if msg.tp == WSMsgType.ERROR:
                 logger.warning('ws connection closed with exception %s', ws.exception())
     finally:
-        logger.info('ws disconnection %s', session)
+        # logger.info('ws disconnection %s', session)
         request.app['background'].remove_ws(ws)
     return ws

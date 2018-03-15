@@ -3,11 +3,11 @@ $primary: #3987da;
 $secondary: #ced4da;
 $form-group-margin-bottom: 0;
 $grid-gutter-width: 1rem;
-$h4-font-size: 1.2rem;
+$h1-font-size: 1.5rem;
 
 // theme variables
 $background: #F1F5F9;
 
 // include bs variables here so they can be used in the theme.
-@import 'libs/bootstrap/functions';
-@import 'libs/bootstrap/variables';
+@import '~bootstrap/scss/functions';
+@import '~bootstrap/scss/variables';

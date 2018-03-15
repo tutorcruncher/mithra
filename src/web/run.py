@@ -58,4 +58,4 @@ if __name__ == '__main__':
     else:
         print('running web server...')
         app = create_app(settings=settings)
-        web.run_app(app, port=8000, access_log=None, print=lambda *args: None)
+        web.run_app(app, port=8000, shutdown_timeout=1, access_log=None, print=lambda *args: None)
