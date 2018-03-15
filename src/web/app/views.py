@@ -1,9 +1,15 @@
 import logging
 
 from aiohttp import WSMsgType
+from aiohttp.web import Response
 from aiohttp.web_ws import WebSocketResponse
 
 logger = logging.getLogger('mithra.web')
+
+
+async def index(request):
+    return Response(text=request.app['index_html'], content_type='text/html')
+
 
 calls_sql = """
 SELECT array_to_json(array_agg(row_to_json(t)), TRUE)

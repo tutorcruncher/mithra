@@ -9,8 +9,7 @@ from shared.db import prepare_database
 
 from .background import Background
 from .settings import THIS_DIR, Settings
-from .views import favicon, index, robots_txt
-from .views.main import main_ws
+from .views import index, main_ws
 
 
 async def startup(app: web.Application):
@@ -29,8 +28,6 @@ async def cleanup(app: web.Application):
 
 def setup_routes(app):
     app.router.add_get('/', index, name='index')
-    app.router.add_get('/robots.txt', robots_txt, name='robots-txt')
-    app.router.add_get('/favicon.ico', favicon, name='favicon')
     app.router.add_get('/ws/', main_ws, name='ws')
 
 
