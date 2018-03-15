@@ -44,8 +44,8 @@ FROM (
   SELECT c.id AS id, c.number AS number, c.country AS country, c.ts AS ts,
   p.name AS person_name, c2.name AS company
   FROM calls AS c
-  LEFT JOIN people p ON c.person = p.id
-  LEFT JOIN companies c2 ON p.company = c2.id
+  LEFT JOIN people AS p ON c.person = p.id
+  LEFT JOIN companies AS c2 ON p.company = c2.id
   ORDER BY c.ts DESC
   LIMIT 100
 ) t;
@@ -78,9 +78,9 @@ async def main_ws(request):
 people_sql = """
 SELECT array_to_json(array_agg(row_to_json(t)), TRUE)
 FROM (
-  SELECT p.name AS name, p.last_seen AS last_seen, p.details AS details, c.name AS company_name, c.id as company_id
+  SELECT p.id AS id, p.name AS name, p.last_seen AS last_seen, c.name AS company_name, c.id as company_id
   FROM people AS p
-  LEFT JOIN companies c ON p.company = c.id
+  LEFT JOIN companies AS c ON p.company = c.id
   ORDER BY p.last_seen DESC
   LIMIT 100
 ) t;
@@ -96,7 +96,7 @@ async def people(request):
 companies_sql = """
 SELECT array_to_json(array_agg(row_to_json(t)), TRUE)
 FROM (
-  SELECT id, name, login_url, created, details
+  SELECT id, name, login_url, created
   FROM companies
   ORDER BY created DESC
   LIMIT 100
@@ -108,3 +108,59 @@ async def companies(request):
     json_str = await request.app['pg'].fetchval(companies_sql)
     # return as dict in case we want to add count etc. later
     return raw_json_response('{"items": %s}' % (json_str or '[]'))
+
+
+call_details_sql = """
+SELECT row_to_json(t)
+FROM (
+  SELECT c.id AS id, c.number AS number, c.country AS country, c.ts AS ts,
+  p.id AS person_id, p.name AS person_name, p.last_seen AS person_last_seen, p.details AS person_details, 
+  c2.id AS company_id, c2.name AS company_name, c2.login_url AS company_login_url, 
+  c2.created AS company_created, c2.details AS company_details
+  FROM calls AS c
+  LEFT JOIN people AS p ON c.person = p.id
+  LEFT JOIN companies AS c2 ON p.company = c2.id
+  WHERE c.id=$1
+) t;
+"""
+
+
+async def call_details(request):
+    json_str = await request.app['pg'].fetchval(call_details_sql, int(request.match_info['id']))
+    return raw_json_response(json_str or 'null')
+
+
+person_details_sql = """
+SELECT row_to_json(t)
+FROM (
+  SELECT p.id AS id, p.name AS name, p.last_seen AS last_seen, p.details AS details,
+  c.id AS company_id, c.name AS company_name, c.login_url AS company_login_url,
+  c.created AS company_created, c.details AS company_details, array_agg(pn.number) AS numbers
+  FROM people p
+  LEFT JOIN companies AS c ON p.company = c.id
+  LEFT JOIN people_numbers AS pn ON p.id = pn.person
+  WHERE p.id=$1
+  GROUP BY p.id, c.id
+) t;
+"""
+
+
+async def person_details(request):
+    id = int(request.match_info['id'])
+    json_str = await request.app['pg'].fetchval(person_details_sql, id)
+    return raw_json_response(json_str or 'null')
+
+
+company_details_sql = """
+SELECT row_to_json(t)
+FROM (
+  SELECT id, name, login_url, created, details
+  FROM companies
+  WHERE id=$1
+) t;
+"""
+
+
+async def company_details(request):
+    json_str = await request.app['pg'].fetchval(company_details_sql, int(request.match_info['id']))
+    return raw_json_response(json_str or 'null')

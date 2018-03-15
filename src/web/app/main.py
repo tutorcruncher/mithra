@@ -14,10 +14,13 @@ from .background import Background
 from .middleware import error_middleware, auth_middleware
 from .settings import THIS_DIR, Settings
 from .views import (
+    call_details,
     companies,
+    company_details,
     index,
     main_ws,
     people,
+    person_details,
     signin_with_google,
     signout,
 )
@@ -42,6 +45,10 @@ def setup_routes(app):
     app.router.add_get('/api/ws/', main_ws, name='ws')
     app.router.add_get('/api/people/', people, name='people')
     app.router.add_get('/api/companies/', companies, name='companies')
+
+    app.router.add_get('/api/calls/{id:\d+}/', call_details, name='call-details')
+    app.router.add_get('/api/people/{id:\d+}/', person_details, name='person-details')
+    app.router.add_get('/api/companies/{id:\d+}/', company_details, name='company-details')
 
     app.router.add_post('/api/signin/', signin_with_google, name='signin')
     app.router.add_post('/api/signout/', signout, name='signout')

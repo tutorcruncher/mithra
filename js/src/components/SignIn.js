@@ -15,7 +15,7 @@ class SignIn extends Component {
   }
 
   async componentDidMount () {
-    this.props.setRootState({nav_title: 'Sign In', status: 'anon'})
+    this.props.setRootState({page_title: 'Sign In', status: 'anon'})
     await load_script('https://apis.google.com/js/platform.js')
     window.gapi.load('auth2', () => {
       this.gauth = window.gapi.auth2.init({

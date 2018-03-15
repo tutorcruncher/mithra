@@ -44,7 +44,7 @@ body {
   }
 }
 
-.call-link {
+.list-group-item > a {
   text-decoration: none !important;
   color: black;
 }
@@ -64,4 +64,11 @@ body {
       }
     }
   }
+}
+
+.box {
+  background: $white;
+  border: $border-width solid $list-group-border-color;
+  border-radius: $border-radius;
+  padding: 1rem;
 }

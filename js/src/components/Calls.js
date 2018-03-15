@@ -20,7 +20,7 @@ const NEW_TIME = 3000
 const Call = ({call}) => {
   return (
     <li className={'list-group-item call-list ' + (call.new ? ' new-call': '')}>
-      <Link to={`/call/${call.id}/`} className="d-flex justify-content-between call-link">
+      <Link to={`/calls/${call.id}/`} className="d-flex justify-content-between call-link">
         <div>
           <h6 className="my-0">{call.number}</h6>
           <small className="text-muted">
@@ -48,7 +48,7 @@ class Calls extends Component {
   }
 
   componentDidMount () {
-    this.props.setRootState({nav_title: 'Calls', status: 'loading'})
+    this.props.setRootState({page_title: 'Calls', status: 'loading'})
     this.run_ws()
   }
 

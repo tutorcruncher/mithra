@@ -71,7 +71,10 @@ export const request = (app, method, path, config) => {
         on_error(`wrong response code ${xhr.status}, Response: ${xhr.responseText.substr(0, 500)}`)
       }
     }
-    xhr.onerror = () => on_error(`Error requesting data ${xhr.statusText}: ${xhr.status}`)
+    xhr.onerror = () => {
+      on_error(`Error requesting data ${xhr.statusText}: ${xhr.status}`)
+      app.setState({status: 'offline'})
+    }
     xhr.send(config.send_data || null)
   })
 }

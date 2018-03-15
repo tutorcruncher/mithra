@@ -5,12 +5,13 @@ import Calls from './Calls'
 import StatusBar from './StatusBar'
 import SignIn from './SignIn'
 import {People, Companies} from './ListView'
+import {Call, Person, Company} from './Details'
 
 class _App extends Component {
   constructor (props) {
     super(props)
     this.state = {
-      nav_title: null,
+      page_title: null,
       status: null,
       auth: true,
     }
@@ -23,8 +24,8 @@ class _App extends Component {
 
   componentDidUpdate () {
     let next_title = 'Mithra'
-    if (this.state.nav_title) {
-      next_title += ' - ' + this.state.nav_title
+    if (this.state.page_title) {
+      next_title += ' - ' + this.state.page_title
     }
     if (next_title !== document.title) {
       document.title = next_title
@@ -68,7 +69,7 @@ class _App extends Component {
             </ul>
           </div>
         </nav>
-        <StatusBar title={this.state.nav_title} status={this.state.status}/>
+        <StatusBar title={this.state.page_title} status={this.state.status}/>
         <div className="container">
           <Switch>
             <Route exact path="/" render={props => (
@@ -77,12 +78,33 @@ class _App extends Component {
             <Route exact path="/signin/" render={props => (
               <SignIn history={props.history} setRootState={s => this.setState(s)} requests={this.requests}/>
             )}/>
+
             <Route exact path="/people/" render={props => (
               <People history={props.history} setRootState={s => this.setState(s)} requests={this.requests}/>
             )}/>
             <Route exact path="/companies/" render={props => (
               <Companies history={props.history} setRootState={s => this.setState(s)} requests={this.requests}/>
             )}/>
+
+            <Route exact path="/calls/:id/" render={props => (
+              <Call history={props.history}
+                    setRootState={s => this.setState(s)}
+                    requests={this.requests}
+                    id={props.match.params.id}/>
+            )}/>
+            <Route exact path="/people/:id/" render={props => (
+              <Person history={props.history}
+                      setRootState={s => this.setState(s)}
+                      requests={this.requests}
+                      id={props.match.params.id}/>
+            )}/>
+            <Route exact path="/companies/:id/" render={props => (
+              <Company history={props.history}
+                       setRootState={s => this.setState(s)}
+                       requests={this.requests}
+                      id={props.match.params.id}/>
+            )}/>
+
             <Route render={props => (
               <div className="box">
                 <h3>Page not found</h3>
