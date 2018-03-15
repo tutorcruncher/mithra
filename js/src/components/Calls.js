@@ -43,7 +43,7 @@ class Calls extends Component {
       <ul className="list-group py-3 mx-0">
         {this.state.calls.map((call, i) => (
           <li key={i} className="list-group-item">
-            <Link to="/" className="d-flex justify-content-between">
+            <Link to={`/call/${call.id}/`} className="d-flex justify-content-between list-link">
               <div>
                 <h6 className="my-0">{call.number}</h6>
                 <small className="text-muted">

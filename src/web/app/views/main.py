@@ -8,8 +8,8 @@ logger = logging.getLogger('mithra.web')
 calls_sql = """
 SELECT array_to_json(array_agg(row_to_json(t)), TRUE)
 FROM (
-  SELECT c.number AS number, c.country AS country, c.ts AS ts,
-  p.id AS person_id, p.name AS person_name, c2.name AS company
+  SELECT c.id AS id, c.number AS number, c.country AS country, c.ts AS ts,
+  p.name AS person_name, c2.name AS company
   FROM calls AS c
   LEFT JOIN people p ON c.person = p.id
   LEFT JOIN companies c2 ON p.company = c2.id

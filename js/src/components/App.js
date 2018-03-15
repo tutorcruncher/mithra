@@ -25,11 +25,21 @@ class _App extends Component {
   render () {
     return (
       <div>
-        <div className="py-2 container">
-          <Link to="/" className="nav-link">
-            <h1>Mithra</h1>
-          </Link>
-        </div>
+        <nav className="navbar navbar-expand-lg navbar-light">
+          <div className="container">
+
+            <Link className="navbar-brand" to="/">Mithra</Link>
+
+            <ul className="navbar-nav mr-auto">
+              <li className="nav-item">
+                <Link className="nav-link" to="/people/">People</Link>
+              </li>
+              <li className="nav-item">
+                <Link className="nav-link" to="/companies/">Companies</Link>
+              </li>
+            </ul>
+          </div>
+        </nav>
         <StatusBar title={this.state.nav_title} status={this.state.status}/>
         <div className="container">
           <Switch>
