@@ -2,6 +2,7 @@ version: '3.4'
 
 volumes:
  pg_data: {}
+ web_data: {}
 
 networks:
   default:
@@ -44,11 +45,15 @@ services:
     environment:
       APP_PG_HOST: postgres
       APP_PG_PASSWORD: docker
+      APP_CACHE_DIR: '/persistent'
+      APP_INTERCOM_KEY: ${APP_INTERCOM_KEY}
       COMMIT: ${COMMIT}
       RELEASE_DATE: ${RELEASE_DATE}
       RAVEN_DSN: ${RAVEN_DSN}
       SERVER_NAME: ${SERVER_NAME:-mithra}
     restart: always
+    volumes:
+    - web_data:/persistent
     networks:
       default:
         ipv4_address: 172.20.0.102

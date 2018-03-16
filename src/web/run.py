@@ -16,6 +16,7 @@ from shared.logs import setup_logging  # NOQA
 from app.main import create_app  # NOQA
 from app.patch import reset_database, run_patch  # NOQA
 from app.settings import Settings  # NOQA
+from app.background import download_from_intercom as _download_from_intercom  # NOQA
 
 
 logger = logging.getLogger('mithra.web.run')
@@ -40,6 +41,11 @@ def check():
         exit(exit_code)
 
 
+def download_from_intercom(settings):
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(_download_from_intercom(settings))
+
+
 if __name__ == '__main__':
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     setup_logging()
@@ -47,7 +53,7 @@ if __name__ == '__main__':
     try:
         _, command, *args = sys.argv
     except ValueError:
-        print('no command provided, options are: "check", "reset_database", "patch" or "web"')
+        print('no command provided, options are: "check", "reset_database", "patch", "download_from_intercom" or "web"')
         sys.exit(1)
 
     if command == 'check':
@@ -62,6 +68,8 @@ if __name__ == '__main__':
         if live:
             args.remove('--live')
         run_patch(settings, live, args[0] if args else None)
+    elif command == 'download_from_intercom':
+        download_from_intercom(settings)
     elif command == 'web':
         print('running web server...')
         app = create_app(settings=settings)

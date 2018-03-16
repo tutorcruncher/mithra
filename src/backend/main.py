@@ -79,7 +79,7 @@ class Database:
     async def init(self):
         conn = await lenient_conn(self.settings)
         await conn.close()
-        self._pg = await asyncpg.create_pool(dsn=self.settings.pg_dsn)
+        self._pg = await asyncpg.create_pool(dsn=self.settings.pg_dsn, min_size=1)
 
     def record_call(self, number, country):
         self.tasks.append(self._loop.create_task(self._record_call(number, country)))
