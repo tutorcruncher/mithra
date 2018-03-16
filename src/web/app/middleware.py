@@ -9,11 +9,21 @@ from aiohttp_session import get_session
 from .utils import JsonErrors
 
 request_logger = logging.getLogger('mithra.web.middleware')
+IP_HEADER = 'X-Forwarded-For'
+
+
+def get_ip(request):
+    ips = request.headers.get(IP_HEADER)
+    if ips:
+        return ips.split(',', 1)[0].strip(' ')
+    else:
+        return request.remote
 
 
 async def log_extra(request, response=None):
     return {'data': dict(
         request_url=str(request.rel_url),
+        request_ip=get_ip(request),
         request_method=request.method,
         request_host=request.host,
         request_headers=dict(request.headers),
@@ -25,7 +35,8 @@ async def log_extra(request, response=None):
 
 
 async def log_warning(request, response):
-    request_logger.warning('%s %d', request.rel_url, response.status, extra={
+    ip, ua = get_ip(request), request.headers.get('User-Agent')
+    request_logger.warning('%s %d from %s ua: "%s"', request.rel_url, response.status, ip, ua, extra={
         'fingerprint': [request.rel_url, str(response.status)],
         'data': await log_extra(request, response)
     })

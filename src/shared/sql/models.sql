@@ -4,10 +4,13 @@ CREATE SCHEMA public;
 CREATE TABLE companies (
   id SERIAL PRIMARY KEY,
   name VARCHAR(255) NOT NULL,
+  ic_id VARCHAR(31),
   login_url VARCHAR(255),
   created TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  has_support BOOLEAN DEFAULT FALSE,
   details JSONB
 );
+CREATE INDEX company_ic_id ON companies USING btree (ic_id);
 
 CREATE TABLE people (
   id SERIAL PRIMARY KEY,

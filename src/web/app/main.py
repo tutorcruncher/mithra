@@ -37,6 +37,7 @@ async def cleanup(app: web.Application):
 
 
 def setup_routes(app):
+    app.router.add_get('/', index, name='index-root')
     app.router.add_get('/api/', index, name='index')
     app.router.add_get('/api/ws/', main_ws, name='ws')
     app.router.add_get('/api/people/', people, name='people')

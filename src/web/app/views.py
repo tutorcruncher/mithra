@@ -1,4 +1,5 @@
 import logging
+from asyncio import CancelledError
 from time import time
 
 from aiohttp import WSMsgType
@@ -70,6 +71,8 @@ async def main_ws(request):
             logger.info('ws message:', msg)
             if msg.tp == WSMsgType.ERROR:
                 logger.warning('ws connection closed with exception %s', ws.exception())
+    except CancelledError:
+        pass
     finally:
         request.app['ws_propagator'].remove_ws(ws)
     return ws

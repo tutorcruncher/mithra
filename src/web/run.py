@@ -35,7 +35,7 @@ async def _check(url):
 
 def check():
     loop = asyncio.get_event_loop()
-    exit_code = loop.run_until_complete(_check('http://127.0.0.1:8000'))
+    exit_code = loop.run_until_complete(_check('http://127.0.0.1:8000/api/'))
     if exit_code:
         exit(exit_code)
 
