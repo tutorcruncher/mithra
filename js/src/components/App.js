@@ -44,16 +44,18 @@ class _App extends Component {
         state: {from: this.props.location}
       }}/>
     }
+    console.log(this.props.history.location.pathname)
+    const active_nav = pathname => this.props.history.location.pathname.startsWith(pathname) && ' active'
     return (
       <div>
         <nav className="navbar navbar-expand navbar-light fixed-top bg-light">
           <div className="container">
             <Link className="navbar-brand" to="/">Mithra</Link>
             <ul className="navbar-nav mr-auto">
-              <li className="nav-item">
+              <li className={`nav-item${active_nav('/people/')}`}>
                 <Link className="nav-link" to="/people/">People</Link>
               </li>
-              <li className="nav-item">
+              <li className={`nav-item${active_nav('/companies/')}`}>
                 <Link className="nav-link" to="/companies/">Companies</Link>
               </li>
             </ul>

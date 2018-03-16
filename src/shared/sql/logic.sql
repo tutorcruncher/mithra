@@ -21,11 +21,12 @@ CREATE OR REPLACE FUNCTION call_notify() RETURNS trigger AS $$
     payload JSON;
     person_name VARCHAR(255);
     company VARCHAR(255);
+    has_support BOOLEAN;
   BEGIN
-   SELECT people.name, companies.name INTO person_name, company
+   SELECT p.name, co.name, co.has_support INTO person_name, company, has_support
       FROM calls
-      JOIN people ON calls.person = people.id
-      JOIN companies ON people.company = companies.id
+      JOIN people AS p ON calls.person = p.id
+      JOIN companies AS co ON p.company = co.id
       WHERE calls.id=NEW.id;
 
     payload := json_build_object(
@@ -34,7 +35,8 @@ CREATE OR REPLACE FUNCTION call_notify() RETURNS trigger AS $$
       'country', NEW.country,
       'ts', NEW.ts,
       'person_name', person_name,
-      'company', company
+      'company', company,
+      'has_support', has_support
     );
     -- notify no channel "call"
     PERFORM pg_notify('call', payload::text);

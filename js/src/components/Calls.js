@@ -16,18 +16,23 @@ const notify = async (msg) => {
   }
 }
 const NEW_TIME = 3000
+const Bull = () => <span className="px-1">&bull;</span>
 
 const Call = ({call}) => {
   return (
     <li className={'list-group-item call-list ' + (call.new ? ' new-call': '')}>
       <Link to={`/calls/${call.id}/`} className="d-flex justify-content-between call-link">
         <div>
-          <h6 className="my-0">{call.number}</h6>
-          <small className="text-muted">
-            {call.person_name}
-            {call.company && <span> ({call.company})</span>}
-            &nbsp;
-            </small>
+          <h6 className="my-0">{call.number} {call.has_support && <span>✔</span>}</h6>
+          <small>
+            {call.person_name ?
+            <span className="text-muted">
+              {call.person_name} <Bull/>
+              {call.company} {call.company && <Bull/>}
+              <span>{call.has_support ? 'has support' : 'no support'}</span>
+            </span>
+            : <span>&nbsp;</span>}
+          </small>
         </div>
         <span className="float-right text-muted">{format_ts(call.ts)}</span>
       </Link>
@@ -96,7 +101,8 @@ class Calls extends Component {
     this.setState({error: null})
     this.update_calls(new_call ? [data].concat(this.state.calls) : data)
     if (new_call) {
-      let msg = '📞: '
+      let msg = '📞 '
+      msg += data.has_support ? '✔ ' : '✘ '
       if (data.person_name) {
         msg += data.person_name
         if (data.company) {
