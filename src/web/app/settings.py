@@ -11,5 +11,3 @@ class Settings(PgSettings):
     auth_key = b'R60Wdn84EzcTuP4YQxvAAgiDlyNgl38keTVysTDdr2g='
     intercom_key: str = None
     cache_dir: str = '/tmp/mithra'
-
-

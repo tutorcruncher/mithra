@@ -3,7 +3,6 @@ import hashlib
 import logging
 import re
 import secrets
-from time import time
 from typing import NamedTuple
 
 import asyncpg
@@ -128,10 +127,10 @@ class SipClient:
         self.local_ip = None
         self.cseq = 1
         self.call_id = secrets.token_hex()[:10]
-        self.last_invitation = 0
         self.connected = asyncio.Event()
         self.request_lock = asyncio.Lock()
         self.request_future = None
+        self.call_cache = {}
 
     async def init(self):
         addr = self.settings.sip_host, self.settings.sip_port
@@ -242,10 +241,7 @@ class SipClient:
             # don't care
             pass
         elif method == 'INVITE':
-            n = time()
-            if (n - self.last_invitation) > 1:
-                self.process_invite_request(headers)
-            self.last_invitation = n
+            self.process_incoming_call(headers)
         else:
             logger.warning('unknown request: %s', method, extra={
                 'data': {
@@ -255,8 +251,19 @@ class SipClient:
                 }
             })
 
-    def process_invite_request(self, headers):
+    def existing_call(self, from_header):
+        # tag in from header remains the same for a given call but changes between calls:
+        _existing_call = from_header in self.call_cache
+        # very simple lru cache, if self.call_cache is 200 or longer cut to 100 including this call
+        if len(self.call_cache) >= 200:
+            self.call_cache = {k: 1 for k in list(self.call_cache.keys())[-99:]}
+        self.call_cache[from_header] = 1
+        return _existing_call
+
+    def process_incoming_call(self, headers):
         from_header = headers['From']
+        if self.existing_call(from_header):
+            return
         m = NUMBER.search(from_header)
         if m:
             number = m.groups()[0]

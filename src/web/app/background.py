@@ -6,7 +6,7 @@ from pathlib import Path
 from time import time
 
 import asyncpg
-from aiohttp import ClientSession, ClientError
+from aiohttp import ClientError, ClientSession
 
 from .settings import Settings
 
@@ -114,12 +114,12 @@ class Downloader(_Worker):
                 raise RuntimeError(f'wrong response: {r.status}')
 
     companies_insert_sql = """
-    INSERT INTO companies (name, ic_id, created, login_url, has_support, details) 
+    INSERT INTO companies (name, ic_id, created, login_url, has_support, details)
                    VALUES ($1,   $2,    $3,      $4,        $5,          $6)
-    ON CONFLICT (ic_id) DO UPDATE SET 
-      name=EXCLUDED.name, 
+    ON CONFLICT (ic_id) DO UPDATE SET
+      name=EXCLUDED.name,
       created=EXCLUDED.created,
-      login_url=EXCLUDED.login_url, 
+      login_url=EXCLUDED.login_url,
       has_support=EXCLUDED.has_support,
       details=EXCLUDED.details
     RETURNING id
@@ -155,17 +155,17 @@ class Downloader(_Worker):
                 return company_lookup
 
     people_insert_sql = """
-    INSERT INTO people (name, ic_id, company, last_seen, details) 
+    INSERT INTO people (name, ic_id, company, last_seen, details)
                 VALUES ($1,   $2,    $3,      $4,        $5)
-    ON CONFLICT (ic_id) DO UPDATE SET 
-      name=EXCLUDED.name, 
+    ON CONFLICT (ic_id) DO UPDATE SET
+      name=EXCLUDED.name,
       last_seen=EXCLUDED.last_seen,
       details=EXCLUDED.details
     RETURNING id
     """
     number_insert_sql = """
     INSERT INTO people_numbers (person, number) VALUES ($1, $2)
-    ON CONFLICT DO NOTHING 
+    ON CONFLICT DO NOTHING
     """
 
     async def update_people(self, session, conn, company_lookup):

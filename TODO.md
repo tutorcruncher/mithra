@@ -5,10 +5,11 @@
 * DONE company views
 * DONE people views
 * DONE asyncio sentry log handler
-* webhooks
+* DONE simplify incoming calls
+* DONE deduplication of incoming calls
 * active nav item
 * add support to call info
-* deduplication of incoming calls
+* pagination on lists
 * watch multiple SIP accounts
 * https://pypi.python.org/pypi/phonenumbers, perhaps too much memory usage
 * changing favicon

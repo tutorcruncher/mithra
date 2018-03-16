@@ -96,7 +96,7 @@ class Calls extends Component {
     this.setState({error: null})
     this.update_calls(new_call ? [data].concat(this.state.calls) : data)
     if (new_call) {
-      let msg = 'Incoming call from '
+      let msg = '📞: '
       if (data.person_name) {
         msg += data.person_name
         if (data.company) {
