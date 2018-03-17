@@ -1,5 +1,6 @@
 DROP SCHEMA public CASCADE;
 CREATE SCHEMA public;
+CREATE EXTENSION pg_trgm;
 
 CREATE TABLE companies (
   id SERIAL PRIMARY KEY,
@@ -18,9 +19,11 @@ CREATE TABLE people (
   name VARCHAR(255) NOT NULL,
   ic_id VARCHAR(63) NOT NULL UNIQUE,
   last_seen TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  search TEXT,
   details JSONB
 );
 CREATE INDEX people_last_seen ON people USING btree (last_seen);
+CREATE INDEX search_index ON people USING GIN (search gin_trgm_ops);
 
 CREATE TABLE people_numbers (
   person INT NOT NULL REFERENCES people ON DELETE CASCADE,

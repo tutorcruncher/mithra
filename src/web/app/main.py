@@ -10,11 +10,12 @@ from aiohttp_session import session_middleware
 from aiohttp_session.cookie_storage import EncryptedCookieStorage
 
 from shared.db import prepare_database
+from shared.logs import setup_logging
 
 from .background import Downloader, WebsocketPropagator
 from .middleware import auth_middleware, error_middleware
 from .settings import THIS_DIR, Settings
-from .views import (call_details, companies, company_details, index, main_ws, people, person_details,
+from .views import (call_details, companies, company_details, index, main_ws, people, person_details, search,
                     signin_with_google, signout)
 
 
@@ -46,6 +47,7 @@ def setup_routes(app):
     app.router.add_get('/api/calls/{id:\d+}/', call_details, name='call-details')
     app.router.add_get('/api/people/{id:\d+}/', person_details, name='person-details')
     app.router.add_get('/api/companies/{id:\d+}/', company_details, name='company-details')
+    app.router.add_get('/api/search/', search, name='search')
 
     app.router.add_post('/api/signin/', signin_with_google, name='signin')
     app.router.add_post('/api/signout/', signout, name='signout')
@@ -53,6 +55,7 @@ def setup_routes(app):
 
 def create_app(*, settings: Settings=None):
     settings = settings or Settings()
+    setup_logging()
 
     secret_key = base64.urlsafe_b64decode(settings.auth_key)
     app = web.Application(middlewares=(

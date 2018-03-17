@@ -78,7 +78,7 @@ def pretty_json(data):
 
 def raw_json_response(json_str, status_=200):
     return Response(
-        body=json_str.encode(),
+        body=json_str.encode() + b'\n',
         status=status_,
         content_type=JSON_CONTENT_TYPE,
     )

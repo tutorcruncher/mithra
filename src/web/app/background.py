@@ -1,6 +1,7 @@
 import asyncio
 import json
 import logging
+import re
 from datetime import datetime, timedelta
 from pathlib import Path
 from time import time
@@ -95,7 +96,9 @@ class Downloader(_Worker):
     ERROR_FREQ = 600
 
     async def _get(self, session, url, _retry=0):
+        start = time()
         async with session.get(url) as r:
+            self.request_time += time() - start
             if r.status == 429 and _retry < 5:
                 print('429, waiting 2 seconds...')
                 await asyncio.sleep(2)
@@ -167,21 +170,25 @@ class Downloader(_Worker):
     INSERT INTO people_numbers (person, number) VALUES ($1, $2)
     ON CONFLICT DO NOTHING
     """
+    clean_numbers = re.compile(r'[^\+\d]')
 
     async def update_people(self, session, conn, company_lookup):
         start = time()
         people_stmt = await conn.prepare(self.people_insert_sql)
         number_stmt = await conn.prepare(self.number_insert_sql)
+        update_stmp = await conn.prepare('SELECT update_search($1)')
         updated = 0
+        ignore = {'Clients', 'Contractors'}
         for page in range(1, int(1e6)):
             data = await self._get(session, f'https://api.intercom.io/users?per_page=60&page={page}')
             for user in data['users']:
-                if not user['phone']:
+                if not user['phone'] or user['name'] in ignore:
                     continue
                 try:
                     company = company_lookup[user['companies']['companies'][0]['id']]
                 except KeyError:
-                    logger.error('unable to find company for user %s', user)
+                    # debug(user)
+                    logger.error('unable to find company for user %s', user, extra={'data': {'user': user}})
                     raise
                 user_id = await people_stmt.fetchval(
                     user['name'],
@@ -194,7 +201,9 @@ class Downloader(_Worker):
                         country=user['location_data'].get('country_name'),
                     ))
                 )
-                await number_stmt.fetchval(user_id, user['phone'])
+                number = self.clean_numbers.sub('', user['phone'].lower())
+                await number_stmt.fetchval(user_id, number)
+                await update_stmp.fetchval(user_id)
                 updated += 1
             if not data['pages']['next']:
                 logger.info('updated %d people in %0.2f seconds', updated, time() - start)
@@ -205,6 +214,7 @@ class Downloader(_Worker):
             logger.info("intercom key not set, can't download data")
             return self.FREQ
 
+        self.request_time = 0
         start = time()
         cache_dir = Path(self.settings.cache_dir)
         cache_dir.mkdir(exist_ok=True, parents=True)
@@ -232,7 +242,8 @@ class Downloader(_Worker):
                 company_lookup = await self.update_companies(session, conn)
                 await self.update_people(session, conn, company_lookup)
 
-        logger.info('companies and people updated from intercom in %0.2f seconds', time() - start)
+        logger.info('companies and people updated from intercom in %0.2fs, total request time %0.2fs',
+                    time() - start, self.request_time)
         cache_file.write_text(f'{start:0.0f}')
         return self.FREQ
 

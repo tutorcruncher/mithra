@@ -181,3 +181,27 @@ async def company_details(request):
         people_json_str = await request.app['pg'].fetchval(company_people_sql, co_id)
         json_str = json_str[:-1] + ', "people": %s}' % (people_json_str or '[]')
     return raw_json_response(json_str or 'null')
+
+
+people_search_sql = """
+SELECT array_to_json(array_agg(row_to_json(t)), TRUE)
+FROM (
+  SELECT p.id AS id, p.name AS name, p.last_seen AS last_seen,
+  co.name AS company_name, co.id as company_id,
+  similarity(search, $1) similarity
+
+  FROM people AS p
+  LEFT JOIN people_numbers AS pn ON p.id = pn.person
+  LEFT JOIN companies AS co ON p.company = co.id
+  WHERE p.search ILIKE $2
+  GROUP BY p.id, co.id
+  ORDER BY similarity DESC, p.last_seen DESC
+  LIMIT 10
+) t;
+"""
+
+
+async def search(request):
+    query = request.query.get('q')
+    json_str = await request.app['pg'].fetchval(people_search_sql, query, f'%{query}%')
+    return raw_json_response(json_str or 'null')

@@ -69,6 +69,7 @@ PUBLIC_VIEWS = {
     'index',
     'signin',
     'ws',  # authentication is done by ws so it can return a websocket code
+    'search',  # TODO remove
 }
 
 
