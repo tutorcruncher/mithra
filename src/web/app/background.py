@@ -157,6 +157,13 @@ class Downloader(_Worker):
                 logger.info('updated %d companies in %0.2f seconds', len(company_lookup), time() - start)
                 return company_lookup
 
+    people_name_match_sql = """
+    SELECT id, last_seen
+    FROM people
+    WHERE company=$1 AND ic_id!=$2 AND lower(name)=lower($3)
+    ORDER BY last_seen DESC
+    LIMIT 1
+    """
     people_insert_sql = """
     INSERT INTO people (name, ic_id, company, last_seen, details)
                 VALUES ($1,   $2,    $3,      $4,        $5)
@@ -166,6 +173,14 @@ class Downloader(_Worker):
       details=EXCLUDED.details
     RETURNING id
     """
+    people_update_last_seen_sql = """
+    UPDATE people SET last_seen=$1, details=$2 
+    WHERE id=$3
+    """
+    people_update_sql = """
+    UPDATE people SET details=$1 
+    WHERE id=$2
+    """
     number_insert_sql = """
     INSERT INTO people_numbers (person, number) VALUES ($1, $2)
     ON CONFLICT DO NOTHING
@@ -174,10 +189,12 @@ class Downloader(_Worker):
 
     async def update_people(self, session, conn, company_lookup):
         start = time()
+        people_match_stmt = await conn.prepare(self.people_name_match_sql)
         people_stmt = await conn.prepare(self.people_insert_sql)
         number_stmt = await conn.prepare(self.number_insert_sql)
         update_stmp = await conn.prepare('SELECT update_search($1)')
         updated = 0
+        duplicates = 0
         ignore = {'Clients', 'Contractors', 'Agents', 'ServiceRecipients'}
         for page in range(1, int(1e6)):
             data = await self._get(session, f'https://api.intercom.io/users?per_page=60&page={page}')
@@ -190,23 +207,38 @@ class Downloader(_Worker):
                     # debug(user)
                     logger.error('unable to find company for user %s', user, extra={'data': {'user': user}})
                     raise
-                user_id = await people_stmt.fetchval(
-                    user['name'],
-                    user['id'],
-                    company,
-                    from_unix_ts(user['last_request_at']),
-                    json.dumps(dict(
-                        user_agent=user['user_agent_data'],
-                        city=user['location_data'].get('city_name'),
-                        country=user['location_data'].get('country_name'),
-                    ))
-                )
+                ic_id, name, last_seen = user['id'], user['name'], from_unix_ts(user['last_request_at'])
+                details = json.dumps(dict(
+                    user_agent=user['user_agent_data'],
+                    city=user['location_data'].get('city_name'),
+                    country=user['location_data'].get('country_name'),
+                ))
+
+                r = await people_match_stmt.fetchrow(company, ic_id, name)
+                if r:
+                    user_id, prev_last_seen = r
+                    duplicates += 1
+                    if last_seen > prev_last_seen:
+                        # can't be bothered with prepared statements here
+                        await conn.execute(self.people_update_last_seen_sql, last_seen, details, user_id)
+                    else:
+                        await conn.execute(self.people_update_sql, details, user_id)
+                else:
+                    user_id = await people_stmt.fetchval(
+                        name,
+                        ic_id,
+                        company,
+                        last_seen,
+                        details,
+                    )
+
                 number = self.clean_numbers.sub('', user['phone'].lower())
                 await number_stmt.fetchval(user_id, number)
                 await update_stmp.fetchval(user_id)
                 updated += 1
             if not data['pages']['next']:
-                logger.info('updated %d people in %0.2f seconds', updated, time() - start)
+                t = time() - start
+                logger.info('updated %d people with %d duplicates in %0.2f seconds', updated, duplicates, t)
                 return company_lookup
 
     async def download(self):

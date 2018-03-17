@@ -60,7 +60,7 @@ class Calls extends Component {
     this.props.setRootState({page_title: 'Calls', status: 'loading'})
     this.run_ws()
     setTimeout(() => {
-      this.mounted && this.setState({loaded: false})
+      this.mounted && !this.state.loaded && this.setState({loaded: false})
     }, 500)
   }
 
