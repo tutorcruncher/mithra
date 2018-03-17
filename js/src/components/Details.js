@@ -7,18 +7,23 @@ class DetailsView extends Component {
     super(props)
     this.state = {
       item: null,
+      loaded: false,
       error: null,
     }
     this.url = null
     this.render_details = this.render_details.bind(this)
+    this.get_url = this.get_url.bind(this)
+  }
+
+  get_url () {
+    return this.url.replace(':id', this.props.id)
   }
 
   async componentDidMount () {
     this.props.setRootState({status: 'loading'})
     try {
-      const data = await this.props.requests.get(this.url.replace(':id', this.props.id))
-      console.log('data:', data)
-      this.setState({item: data})
+      const data = await this.props.requests.get(this.get_url())
+      this.setState({item: data, loaded: true})
       this.props.setRootState({status: 'ok', page_title: this.get_title(data)})
     } catch (err) {
       this.setState({error: err})
@@ -26,7 +31,7 @@ class DetailsView extends Component {
   }
 
   get_title (data) {
-    return data.name || this.url
+    return data ? data.name : this.get_url()
   }
 
   render_details () {
@@ -40,6 +45,13 @@ class DetailsView extends Component {
   render () {
     if (this.state.error) {
       return <Error error={this.state.error}/>
+    }
+    else if (this.state.loaded && !this.state.item) {
+      return (
+        <div className="box">
+          Item not found at <code>{this.get_url()}</code>.
+        </div>
+      )
     }
     return (
       <div className="box">

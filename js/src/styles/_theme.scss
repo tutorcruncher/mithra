@@ -72,3 +72,10 @@ body {
   border-radius: $border-radius;
   padding: 1rem;
 }
+
+@media (min-width: map-get($grid-breakpoints, "lg")) {
+  .search {
+    width: 500px !important;
+  }
+}
+

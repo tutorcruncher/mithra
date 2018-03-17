@@ -45,17 +45,27 @@ class Calls extends Component {
     super(props)
     this.state = {
       calls: [],
+      loaded: null,
       error: null,
     }
     this.run_ws = this.run_ws.bind(this)
     this.on_message = this.on_message.bind(this)
     this.update_calls = this.update_calls.bind(this)
     this.first_msg = true
+    this.mounted = false
   }
 
   componentDidMount () {
+    this.mounted = true
     this.props.setRootState({page_title: 'Calls', status: 'loading'})
     this.run_ws()
+    setTimeout(() => {
+      this.mounted && this.setState({loaded: false})
+    }, 500)
+  }
+
+  componentWillUnmount () {
+    this.mounted = false
   }
 
   run_ws () {
@@ -70,6 +80,7 @@ class Calls extends Component {
 
     socket.onopen = () => {
       console.log('websocket open')
+      this.setState({loaded: true})
     }
 
     socket.onclose = e => {
@@ -79,20 +90,26 @@ class Calls extends Component {
       } else {
         console.log('websocket closed, reconnecting in 5 seconds', e)
         this.props.setRootState({status: 'offline'})
-        this.setState({calls: []})
-        setTimeout(this.run_ws, 5000)
+
+        if (this.mounted) {
+          this.setState({calls: []})
+          setTimeout(this.run_ws, 5000)
+        }
       }
     }
 
     socket.onerror = e => {
       console.warn('websocket error:', e)
-      this.setState({error: `WebSocket error`})
+      this.mounted && this.setState({error: `WebSocket error`})
     }
 
     socket.onmessage = this.on_message
   }
 
   on_message (event) {
+    if (!this.mounted) {
+      return
+    }
     this.first_msg && notify()
     this.first_msg = false
     this.props.setRootState({status: 'online'})
@@ -121,6 +138,9 @@ class Calls extends Component {
   }
 
   update_calls (calls) {
+    if (!this.mounted) {
+      return
+    }
     const now = new Date()
     calls = calls || this.state.calls
     this.setState({
@@ -135,6 +155,18 @@ class Calls extends Component {
   render () {
     if (this.state.error) {
       return <Error error={this.state.error}/>
+    }
+    if (!this.state.calls.length && this.state.loaded !== null) {
+      return this.state.loaded ? (
+        <div className="box">
+          No calls recorded.
+        </div>
+      ) : (
+        <div className="box">
+          <div className="loader"/>
+          <div className="text-center h3">Loading...</div>
+        </div>
+      )
     }
     return (
       <ul className="list-group py-3 mx-0">

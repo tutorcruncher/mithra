@@ -1,9 +1,11 @@
 import React, { Component } from 'react'
 import {Link, Redirect, Route, Switch, withRouter} from 'react-router-dom'
+import {debounce} from 'lodash'
 import {get, post} from '../utils'
 import Calls from './Calls'
 import StatusBar from './StatusBar'
 import SignIn from './SignIn'
+import Search from './Search'
 import {People, Companies} from './ListView'
 import {Call, Person, Company} from './Details'
 
@@ -14,8 +16,13 @@ class _App extends Component {
       page_title: null,
       status: null,
       auth: true,
+      search: '',
     }
     this.logout = this.logout.bind(this)
+    this.search_enter = this.search_enter.bind(this)
+    this.search_change = this.search_change.bind(this)
+    this.search_go = this.search_go.bind(this)
+    this.debounce_search = debounce(this.search_go, 400)
     this.requests = {
       get: async (...args) => get(this, ...args),
       post: async (...args) => post(this, ...args),
@@ -30,11 +37,32 @@ class _App extends Component {
     if (next_title !== document.title) {
       document.title = next_title
     }
+    this.props.history.listen(loc => {
+      !loc.pathname.startsWith('/search/') && this.setState({search: ''})
+    })
   }
 
   async logout () {
     await this.requests.post('/signout/')
     this.setState({auth: false})
+  }
+
+  search_go (v) {
+    this.props.history.push(`/search/${encodeURIComponent(v)}`)
+  }
+
+  search_change (event) {
+    const search = event.target.value
+    this.setState({search})
+    this.debounce_search(search)
+  }
+
+  async search_enter (event) {
+    if (event.key === 'Enter') {
+      event.preventDefault()
+      event.stopPropagation()
+      this.debounce_search(this.state.search)
+    }
   }
 
   render () {
@@ -44,7 +72,6 @@ class _App extends Component {
         state: {from: this.props.location}
       }}/>
     }
-    console.log(this.props.history.location.pathname)
     const active_nav = pathname => this.props.history.location.pathname.startsWith(pathname) && ' active'
     return (
       <div>
@@ -59,6 +86,14 @@ class _App extends Component {
                 <Link className="nav-link" to="/companies/">Companies</Link>
               </li>
             </ul>
+            <form className="form-inline">
+              <input className="form-control mr-sm-2 search"
+                     type="search"
+                     placeholder="Search"
+                     value={this.state.search}
+                     onChange={this.search_change}
+                     onKeyDown={this.search_enter}/>
+            </form>
             <ul className="navbar-nav ml-auto mr-0">
               <li className="nav-item">
                 <button type="button"
@@ -105,6 +140,18 @@ class _App extends Component {
                        setRootState={s => this.setState(s)}
                        requests={this.requests}
                       id={props.match.params.id}/>
+            )}/>
+            <Route exact path="/search/" render={props => (
+              <Search history={props.history}
+                      setRootState={s => this.setState(s)}
+                      requests={this.requests}
+                      query=""/>
+            )}/>
+            <Route exact path="/search/:query/" render={props => (
+              <Search history={props.history}
+                      setRootState={s => this.setState(s)}
+                      requests={this.requests}
+                      query={props.match.params.query}/>
             )}/>
 
             <Route render={props => (

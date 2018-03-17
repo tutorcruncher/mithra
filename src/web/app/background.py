@@ -178,7 +178,7 @@ class Downloader(_Worker):
         number_stmt = await conn.prepare(self.number_insert_sql)
         update_stmp = await conn.prepare('SELECT update_search($1)')
         updated = 0
-        ignore = {'Clients', 'Contractors'}
+        ignore = {'Clients', 'Contractors', 'Agents', 'ServiceRecipients'}
         for page in range(1, int(1e6)):
             data = await self._get(session, f'https://api.intercom.io/users?per_page=60&page={page}')
             for user in data['users']:

@@ -145,11 +145,24 @@ FROM (
   GROUP BY p.id, co.id
 ) t;
 """
+person_calls_sql = """
+SELECT array_to_json(array_agg(row_to_json(t)), TRUE)
+FROM (
+  SELECT number, country, ts
+  FROM calls
+  WHERE person=$1
+  ORDER BY ts DESC
+  LIMIT 100
+) t;
+"""
 
 
 async def person_details(request):
     id = int(request.match_info['id'])
     json_str = await request.app['pg'].fetchval(person_details_sql, id)
+    if json_str:
+        calls_json_str = await request.app['pg'].fetchval(person_calls_sql, id)
+        json_str = json_str[:-1] + ', "calls": %s}' % (calls_json_str or '[]')
     return raw_json_response(json_str or 'null')
 
 
@@ -203,5 +216,8 @@ FROM (
 
 async def search(request):
     query = request.query.get('q')
-    json_str = await request.app['pg'].fetchval(people_search_sql, query, f'%{query}%')
-    return raw_json_response(json_str or 'null')
+    json_str = None
+    if query and len(query) >= 3:
+        json_str = await request.app['pg'].fetchval(people_search_sql, query, f'%{query}%')
+        print(json_str)
+    return raw_json_response(json_str or '[]')
