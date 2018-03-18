@@ -174,11 +174,11 @@ class Downloader(_Worker):
     RETURNING id
     """
     people_update_last_seen_sql = """
-    UPDATE people SET last_seen=$1, details=$2 
+    UPDATE people SET last_seen=$1, details=$2
     WHERE id=$3
     """
     people_update_sql = """
-    UPDATE people SET details=$1 
+    UPDATE people SET details=$1
     WHERE id=$2
     """
     number_insert_sql = """

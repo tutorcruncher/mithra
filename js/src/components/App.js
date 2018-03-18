@@ -2,6 +2,7 @@ import React, { Component } from 'react'
 import {Link, Redirect, Route, Switch, withRouter} from 'react-router-dom'
 import {debounce} from 'lodash'
 import {get, post} from '../utils'
+import CallsWebSocket from '../ws'
 import Calls from './Calls'
 import StatusBar from './StatusBar'
 import SignIn from './SignIn'
@@ -15,8 +16,12 @@ class _App extends Component {
     this.state = {
       page_title: null,
       status: null,
+      status_alert: null,
       auth: true,
       search: '',
+      ws_calls: [],
+      ws_loaded: null,
+      ws_error: null,
     }
     this.logout = this.logout.bind(this)
     this.search_enter = this.search_enter.bind(this)
@@ -29,6 +34,13 @@ class _App extends Component {
     }
   }
 
+  componentDidMount () {
+    this.ws = new CallsWebSocket(this)
+    this.props.history.listen(loc => {
+      !loc.pathname.startsWith('/search/') && this.setState({search: ''})
+    })
+  }
+
   componentDidUpdate () {
     let next_title = 'Mithra'
     if (this.state.page_title) {
@@ -37,9 +49,6 @@ class _App extends Component {
     if (next_title !== document.title) {
       document.title = next_title
     }
-    this.props.history.listen(loc => {
-      !loc.pathname.startsWith('/search/') && this.setState({search: ''})
-    })
   }
 
   async logout () {
@@ -73,6 +82,7 @@ class _App extends Component {
       }}/>
     }
     const active_nav = pathname => this.props.history.location.pathname.startsWith(pathname) && ' active'
+    console.log(this.props.history.location.pathname)
     return (
       <div>
         <nav className="navbar navbar-expand navbar-light fixed-top bg-light">
@@ -106,11 +116,17 @@ class _App extends Component {
             </ul>
           </div>
         </nav>
-        <StatusBar title={this.state.page_title} status={this.state.status}/>
+        <StatusBar title={this.state.page_title}
+                   status={this.state.status}
+                   alert={this.props.history.location.pathname !== '/' && this.state.status_alert}/>
         <div className="container">
           <Switch>
             <Route exact path="/" render={props => (
-              <Calls history={props.history} setRootState={s => this.setState(s)}/>
+              <Calls history={props.history}
+                     calls={this.state.ws_calls}
+                     loaded={this.state.ws_loaded}
+                     error={this.state.ws_error}
+                     setRootState={s => this.setState(s)}/>
             )}/>
             <Route exact path="/signin/" render={props => (
               <SignIn history={props.history} setRootState={s => this.setState(s)} requests={this.requests}/>

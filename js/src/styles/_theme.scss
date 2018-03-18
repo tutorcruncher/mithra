@@ -21,6 +21,15 @@ body {
   );
 }
 
+@keyframes alert-colour {
+  from, to {
+    opacity: 0;
+  }
+  10%, 90% {
+    opacity: 1;
+  }
+}
+
 .status {
   top: 3.4rem;
   height: 33px;
@@ -41,6 +50,11 @@ body {
   .container {
     position: relative;
     top: -28px;
+  }
+  .alert {
+    color: #c7ffc7;
+    opacity: 0;
+    animation: alert-colour 5s ease-in-out;
   }
 }
 
