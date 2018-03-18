@@ -18,14 +18,7 @@ from main import main  # NOQA
 logger = logging.getLogger('mithra.backend.run')
 
 
-def check():
-    logger.warning('TODO check')
-
-
 if __name__ == '__main__':
     asyncio.set_event_loop_policy(uvloop.EventLoopPolicy())
     setup_logging()
-    if 'check' in sys.argv:
-        check()
-    else:
-        main()
+    main()

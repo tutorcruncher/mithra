@@ -3,13 +3,21 @@ import hashlib
 import logging
 import re
 import secrets
+from pathlib import Path
 from typing import NamedTuple
 
 import asyncpg
+from async_timeout import timeout
 from multidict import CIMultiDict
 
 from shared.db import lenient_conn
 from shared.settings import PgSettings
+
+try:
+    from devtools import debug
+except ImportError:
+    def debug(*args, **kwargs):
+        pass
 
 logger = logging.getLogger('mithra.backend.main')
 
@@ -19,6 +27,7 @@ class Settings(PgSettings):
     sip_port: int = 5060
     sip_username: str
     sip_password: str
+    cache_dir: str = '/tmp/mithra'
 
     @property
     def sip_uri(self):
@@ -35,7 +44,7 @@ NUMBER = re.compile(r'sip:(\d+)@')
 
 class Response(NamedTuple):
     status: int
-    headers: CIMultiDict
+    headers: dict
     response_data: bytes
     request_data: str
 
@@ -119,6 +128,11 @@ class SipProtocol:
 
 
 class SipClient:
+    # time to wait before re-registering if an error occurred
+    ERROR_WAIT = 30
+    # expires time on register commands, will re-register every (expires - 1) seconds
+    EXPIRES = 300
+
     def __init__(self, settings: Settings, db: Database, loop):
         self.settings = settings
         self.db = db
@@ -126,19 +140,43 @@ class SipClient:
         self.transport = None
         self.local_ip = None
         self.cseq = 1
-        self.call_id = secrets.token_hex()[:10]
         self.connected = asyncio.Event()
         self.request_lock = asyncio.Lock()
         self.request_future = None
         self.call_cache = {}
+        self.task = None
+        self.running = False
+
+        cache_dir = Path(self.settings.cache_dir)
+        cache_dir.mkdir(exist_ok=True, parents=True)
+        cache_file = cache_dir / 'caller_id.txt'
+        try:
+            self.call_id = cache_file.read_text().strip(' \r\n')
+        except FileNotFoundError:
+            self.call_id = f'{secrets.token_hex()[:40]}@mithra'
+            cache_file.write_text(self.call_id + '\n')
+            logger.info('generated new Caller-ID: "%s", saved to %s', self.call_id, cache_file)
+        else:
+            logger.info('loaded Caller-ID from %s: "%s"', cache_file, self.call_id)
 
     async def init(self):
         addr = self.settings.sip_host, self.settings.sip_port
         await self.loop.create_datagram_endpoint(self.protocol_factory, remote_addr=addr)
         await self.connected.wait()
-        await self.register()
+        self.running = True
+        logger.info('starting main task...')
+        self.task = self.loop.create_task(self.run())
 
-    async def register(self, expires=300):
+    async def run(self):
+        while True:
+            re_register = await self.register(expires=self.EXPIRES)
+            logger.info('re-registering in %d seconds', re_register)
+            for i in range(re_register):
+                await asyncio.sleep(1)
+                if not self.running:
+                    return
+
+    async def register(self, *, expires):
         common_headers = (
             f'From: <sip:{self.settings.sip_username}@{self.settings.sip_host}:{self.settings.sip_port}>',
             f'To: <sip:{self.settings.sip_username}@{self.settings.sip_host}:{self.settings.sip_port}>',
@@ -152,15 +190,17 @@ class SipClient:
 
         r1: Response = await self.request(
             f'REGISTER sip:{self.settings.sip_host}:{self.settings.sip_port} SIP/2.0',
-            f'Via: SIP/2.0/UDP {self.local_ip}:5060;rport;branch=__branch__',
+            f'Via: SIP/2.0/UDP {self.local_ip}:5060;rport;branch={self.gen_branch()}',
             f'CSeq: {self.cseq} REGISTER',
             *common_headers,
         )
         if r1.status != 401:
+            debug('unexpected response to first REGISTER', r1)
             logger.warning('unexpected response to first REGISTER %s != 401', r1.status, extra={
                 'data': {'response': r1}
             })
-            return
+            # honor "Retry-After"
+            return int(r1.headers.get('Retry-After', self.ERROR_WAIT))
 
         auth = r1.headers['WWW-Authenticate']
         realm = REALM_REGEX.search(auth).groups()[0]
@@ -169,7 +209,7 @@ class SipClient:
         ha2 = md5digest('REGISTER', self.settings.sip_uri)
         r2: Response = await self.request(
             f'REGISTER sip:{self.settings.sip_host}:{self.settings.sip_port} SIP/2.0',
-            f'Via: SIP/2.0/UDP {self.local_ip}:5060;rport;branch=__branch__',
+            f'Via: SIP/2.0/UDP {self.local_ip}:5060;rport;branch={self.gen_branch()}',
             f'CSeq: {self.cseq} REGISTER',
             (
                 f'Authorization: Digest username="{self.settings.sip_username}", realm="{realm}", nonce="{nonce}", '
@@ -177,17 +217,19 @@ class SipClient:
             ),
             *common_headers,
         )
-        if r2.status != 200:
-            logger.warning('unexpected response to second REGISTER %s != 200', r2.status, extra={
+        if expires == 0:
+            logger.info('un-registered, response: %d', r2.status)
+        elif r2.status != 200:
+            debug('unexpected response to second REGISTER', r2)
+            logger.warning('unexpected response to second REGISTER %d != 200', r2.status, extra={
                 'data': {'response': r2}
             })
-            # TODO look at headers and decide how long to wait to retry
-        elif expires == 0:
-            logger.info('successfully un-registered')
+            # honor "Retry-After"
+            return int(r2.headers.get('Retry-After', self.ERROR_WAIT))
         else:
-            re_register = max(10, expires - 10)
-            logger.info('successfully registered, re-registering in %d seconds', re_register)
-            self.loop.call_later(re_register, lambda: self.loop.create_task(self.register(expires)))
+            re_register = max(10, expires - 1)
+            logger.info('successfully registered')
+            return re_register
 
     def protocol_factory(self):
         return SipProtocol(self)
@@ -197,9 +239,12 @@ class SipClient:
         self.local_ip, _ = transport.get_extra_info('sockname')
         self.connected.set()
 
+    def gen_branch(self):
+        # "z9hG4bK" is a special value which branch is apparently supposed to start with
+        return 'z9hG4bK' + secrets.token_hex()[:16]
+
     async def request(self, *req):
-        branch = 'z9hG4bK' + secrets.token_hex()[:16].upper()
-        request_data = '\r\n'.join(req).replace('__branch__', branch) + '\r\n\r\n'
+        request_data = '\r\n'.join(req) + '\r\n\r\n'
         async with self.request_lock:
             status, headers, response_data = await self._request(request_data)
         # debug(request_data, status, dict(headers))
@@ -277,6 +322,11 @@ class SipClient:
         self.db.record_call(number, country)
 
     async def close(self):
+        logger.info('stopping task...')
+        self.running = False
+        with timeout(2):
+            await self.task
+        self.task.result()
         logger.info('un-registering...')
         await self.register(expires=0)
         self.transport.close()
@@ -298,8 +348,7 @@ def main():
     try:
         loop.run_forever()
     except (KeyboardInterrupt, SystemExit):
-        pass
-    finally:
         print('')
+    finally:
         loop.run_until_complete(client.close())
         loop.close()

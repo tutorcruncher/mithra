@@ -2,7 +2,7 @@ version: '3.4'
 
 volumes:
  pg_data: {}
- web_data: {}
+ cache_data: {}
 
 networks:
   default:
@@ -53,7 +53,7 @@ services:
       SERVER_NAME: ${SERVER_NAME:-mithra}
     restart: always
     volumes:
-    - web_data:/persistent
+    - cache_data:/persistent
     networks:
       default:
         ipv4_address: 172.20.0.102
@@ -71,9 +71,12 @@ services:
       APP_SIP_PASSWORD: ${APP_SIP_PASSWORD}
       APP_SIP_HOST: ${APP_SIP_HOST}
       APP_SIP_PORT: ${APP_SIP_PORT}
+      APP_CACHE_DIR: '/persistent'
       COMMIT: ${COMMIT}
       RAVEN_DSN: ${RAVEN_DSN}
       SERVER_NAME: ${SERVER_NAME:-mithra}
+    volumes:
+    - cache_data:/persistent
     restart: always
     depends_on:
     - postgres

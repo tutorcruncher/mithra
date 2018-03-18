@@ -3,8 +3,12 @@ FROM python:3.6-alpine
 RUN apk --update --no-cache add gcc g++ musl-dev libuv libffi-dev make postgresql-dev \
  && rm -rf /var/cache/apk/*
 
+RUN pip install -U pip setuptools
 ADD ./requirements.txt /home/root/requirements.txt
 RUN pip install -r /home/root/requirements.txt
+
+ADD ./requirements-web.txt /home/root/requirements-web.txt
+RUN pip install -r /home/root/requirements-web.txt
 
 ADD ./shared /home/root/shared
 ADD ./web/app /home/root/app

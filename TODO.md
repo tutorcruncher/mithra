@@ -9,6 +9,7 @@
 * DONE deduplication of incoming calls
 * DONE active nav item
 * DONE add support to call info
+* DONE search
 * pagination on lists
 * watch multiple SIP accounts
 * https://pypi.python.org/pypi/phonenumbers, perhaps too much memory usage

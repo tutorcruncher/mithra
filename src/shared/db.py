@@ -9,24 +9,25 @@ from .settings import PgSettings
 logger = logging.getLogger('mithra.db')
 
 
-async def lenient_conn(settings, with_db=True, _retry=0):
+async def lenient_conn(settings, with_db=True):
     if with_db:
         dsn = settings.pg_dsn
     else:
         dsn, _ = settings.pg_dsn.rsplit('/', 1)
 
-    try:
-        with timeout(2):
-            conn = await asyncpg.connect(dsn=dsn)
-    except asyncpg.CannotConnectNowError as e:
-        if _retry < 5:
-            logger.warning('pg temporary connection error %s, %d retries remaining...', e, 5 - _retry)
-            await asyncio.sleep(2)
-            return await lenient_conn(settings, _retry=_retry + 1)
-        else:
-            raise
-    log = logger.info if _retry > 0 else logger.debug
-    log('pg connection successful, version: %s', await conn.fetchval('SELECT version()'))
+    conn = None
+    for retry in range(10, 0, -1):
+        try:
+            with timeout(2):
+                conn = await asyncpg.connect(dsn=dsn)
+        except (asyncpg.PostgresError, OSError) as e:
+            if retry == 1:
+                raise
+            else:
+                logger.warning('pg temporary connection error %s, %d retries remaining...', e, retry)
+                await asyncio.sleep(1)
+
+    logger.info('pg connection successful, version: %s', await conn.fetchval('SELECT version()'))
     return conn
 
 
