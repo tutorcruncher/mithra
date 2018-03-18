@@ -3,11 +3,11 @@ import hashlib
 import logging
 import re
 import secrets
+import signal
 from pathlib import Path
 from typing import NamedTuple
 
 import asyncpg
-from async_timeout import timeout
 from multidict import CIMultiDict
 
 from shared.db import lenient_conn
@@ -165,16 +165,31 @@ class SipClient:
         await self.connected.wait()
         self.running = True
         logger.info('starting main task...')
-        self.task = self.loop.create_task(self.run())
+        self.task = self.loop.create_task(self.main_task())
+        self.loop.add_signal_handler(signal.SIGINT, self.stop)
+        self.loop.add_signal_handler(signal.SIGTERM, self.stop)
+
+    async def main_task(self):
+        try:
+            while True:
+                re_register = await self.register(expires=self.EXPIRES)
+                logger.info('re-registering in %d seconds', re_register)
+                for i in range(re_register):
+                    await asyncio.sleep(1)
+                    if not self.running:
+                        return
+        finally:
+            logger.info('un-registering...')
+            await self.register(expires=0)
+            self.transport.close()
+            await self.db.close()
 
     async def run(self):
-        while True:
-            re_register = await self.register(expires=self.EXPIRES)
-            logger.info('re-registering in %d seconds', re_register)
-            for i in range(re_register):
-                await asyncio.sleep(1)
-                if not self.running:
-                    return
+        await self.task
+
+    def stop(self):
+        print('')  # leaves the ^C on it's own line
+        self.running = False
 
     async def register(self, *, expires):
         common_headers = (
@@ -321,17 +336,6 @@ class SipClient:
         logger.info(f'incoming call from %s%s', number, f' ({country})' if country else '')
         self.db.record_call(number, country)
 
-    async def close(self):
-        logger.info('stopping task...')
-        self.running = False
-        with timeout(2):
-            await self.task
-        self.task.result()
-        logger.info('un-registering...')
-        await self.register(expires=0)
-        self.transport.close()
-        await self.db.close()
-
 
 async def setup(settings, loop):
     db = Database(settings, loop)
@@ -345,10 +349,4 @@ def main():
     loop = asyncio.get_event_loop()
     settings = Settings()
     client = loop.run_until_complete(setup(settings, loop))
-    try:
-        loop.run_forever()
-    except (KeyboardInterrupt, SystemExit):
-        print('')
-    finally:
-        loop.run_until_complete(client.close())
-        loop.close()
+    loop.run_until_complete(client.run())

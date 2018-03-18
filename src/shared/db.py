@@ -15,20 +15,19 @@ async def lenient_conn(settings, with_db=True):
     else:
         dsn, _ = settings.pg_dsn.rsplit('/', 1)
 
-    conn = None
-    for retry in range(10, 0, -1):
+    for retry in range(8, -1, -1):
         try:
             with timeout(2):
                 conn = await asyncpg.connect(dsn=dsn)
         except (asyncpg.PostgresError, OSError) as e:
-            if retry == 1:
+            if retry == 0:
                 raise
             else:
                 logger.warning('pg temporary connection error %s, %d retries remaining...', e, retry)
                 await asyncio.sleep(1)
-
-    logger.info('pg connection successful, version: %s', await conn.fetchval('SELECT version()'))
-    return conn
+        else:
+            logger.info('pg connection successful, version: %s', await conn.fetchval('SELECT version()'))
+            return conn
 
 
 DROP_CONNECTIONS = """

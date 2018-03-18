@@ -21,7 +21,7 @@ def setup_logging():
         'disable_existing_loggers': False,
         'formatters': {
             'mithra.default': {
-                'format': '%(levelname)s %(name)25s: %(message)s',
+                'format': '%(levelname)-7s %(name)25s: %(message)s',
             },
         },
         'handlers': {
