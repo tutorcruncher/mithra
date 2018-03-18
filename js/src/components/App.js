@@ -1,6 +1,6 @@
 import React, { Component } from 'react'
 import {Link, Redirect, Route, Switch, withRouter} from 'react-router-dom'
-import {debounce} from 'lodash'
+import debounce from 'lodash/debounce'
 import {get, post} from '../utils'
 import CallsWebSocket from '../ws'
 import Calls from './Calls'
@@ -23,6 +23,7 @@ class _App extends Component {
       ws_loaded: null,
       ws_error: null,
     }
+    this.ws_reconnect = this.ws_reconnect.bind(this)
     this.logout = this.logout.bind(this)
     this.search_enter = this.search_enter.bind(this)
     this.search_change = this.search_change.bind(this)
@@ -39,6 +40,10 @@ class _App extends Component {
     this.props.history.listen(loc => {
       !loc.pathname.startsWith('/search/') && this.setState({search: ''})
     })
+  }
+
+  ws_reconnect () {
+    this.ws.connect()
   }
 
   componentDidUpdate () {
@@ -82,7 +87,6 @@ class _App extends Component {
       }}/>
     }
     const active_nav = pathname => this.props.history.location.pathname.startsWith(pathname) && ' active'
-    console.log(this.props.history.location.pathname)
     return (
       <div>
         <nav className="navbar navbar-expand navbar-light fixed-top bg-light">
@@ -129,7 +133,10 @@ class _App extends Component {
                      setRootState={s => this.setState(s)}/>
             )}/>
             <Route exact path="/signin/" render={props => (
-              <SignIn history={props.history} setRootState={s => this.setState(s)} requests={this.requests}/>
+              <SignIn history={props.history}
+                      setRootState={s => this.setState(s)}
+                      requests={this.requests}
+                      ws_reconnect={this.ws_reconnect}/>
             )}/>
 
             <Route exact path="/people/" render={props => (

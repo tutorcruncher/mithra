@@ -17,32 +17,39 @@ const NEW_TIME = 5000
 
 export default function CallsWebSocket (app) {
   let first_msg = true
+  this._connected = false
 
-  const run_ws = () => {
+  this.connect = () => {
+    if (this._connected) {
+      console.log('ws already connected')
+      return
+    }
     let ws_url = make_url('/ws/').replace('http', 'ws')
     let socket
     try {
       socket = new WebSocket(ws_url)
     } catch (err) {
-      app.setState({ws_error: `${err}`})
+      app.setState({ws_error: `WebSocket connection error`})
       return
     }
 
     socket.onopen = () => {
       console.log('websocket open')
       app.setState({ws_loaded: true})
+      this._connected = true
     }
 
     socket.onclose = e => {
+      this._connected = false
       if (e.code === 4403) {
         console.log('not authenticated', e)
         app.setState({auth: false})
       } else {
-        console.log('websocket closed, reconnecting in 5 seconds', e)
+        console.warn('websocket closed, reconnecting in 5 seconds', e)
         app.setState({status: 'offline'})
 
         app.setState({ws_calls: []})
-        setTimeout(run_ws, 5000)
+        setTimeout(this.connect, 5000)
       }
     }
     socket.onerror = e => {
@@ -90,7 +97,7 @@ export default function CallsWebSocket (app) {
     }
   }
 
-  run_ws()
+  this.connect()
   setTimeout(() => {
    !app.state.ws_loaded && app.setState({ws_loaded: false})
   }, 500)

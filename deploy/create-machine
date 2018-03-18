@@ -11,12 +11,12 @@ if [ -z ${AWS_SECRET_KEY+x} ]; then
 fi
 
 
-
+# eu-west-2 is London
 docker-machine create \
     --driver amazonec2 \
     --amazonec2-access-key $AWS_ACCESS_KEY \
     --amazonec2-secret-key $AWS_SECRET_KEY \
     --amazonec2-instance-type t2.nano \
     --amazonec2-root-size 20 \
-    --amazonec2-region eu-west-1 \
+    --amazonec2-region eu-west-2 \
     mithra

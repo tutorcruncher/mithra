@@ -33,6 +33,7 @@ class SignIn extends Component {
       await this.props.requests.post('/signin/', {id_token: this.gauth.currentUser.get().getAuthResponse().id_token})
       this.props.setRootState({auth: true})
       this.setState({logged_in: true})
+      this.props.ws_reconnect()
     }  catch (err) {
       this.setState({error: `Signin Error: ${err}`})
     }

@@ -32,21 +32,18 @@ services:
     - logs
 
   js:
-    build: js
     restart: always
     networks:
       default:
         ipv4_address: 172.20.0.101
 
   web:
-    build:
-      context: src
-      dockerfile: Dockerfile.web
     environment:
       APP_PG_HOST: postgres
       APP_PG_PASSWORD: docker
       APP_CACHE_DIR: '/persistent'
       APP_INTERCOM_KEY: ${APP_INTERCOM_KEY}
+      APP_AUTH_KEY: ${APP_AUTH_KEY}
       COMMIT: ${COMMIT}
       RELEASE_DATE: ${RELEASE_DATE}
       RAVEN_DSN: ${RAVEN_DSN}
@@ -61,9 +58,6 @@ services:
     - postgres
 
   backend:
-    build:
-      context: src
-      dockerfile: Dockerfile.backend
     environment:
       APP_PG_HOST: postgres
       APP_PG_PASSWORD: docker

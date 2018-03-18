@@ -5,6 +5,19 @@ services:
     ports:
     - 5001:80
 
+  js:
+    build: js
+
+  web:
+    build:
+      context: src
+      dockerfile: Dockerfile.web
+
+  backend:
+    build:
+      context: src
+      dockerfile: Dockerfile.backend
+
   nginx:
     build: nginx/dev
     restart: always
