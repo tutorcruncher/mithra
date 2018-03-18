@@ -85,10 +85,32 @@ async def response_data(r):
 
 
 EPOCH = datetime(1970, 1, 1)
+CLEAN_NUMBER = re.compile(r'[^\+\d]')
+# only deal with a few cases, doesn't have to be perfect
+STR_REPLACE = [
+    (re.compile(r'&amp;'), '&'),
+    (re.compile(r'&#39;'), "'"),
+    (re.compile(r'&#34;'), '"'),
+    (re.compile(r'&quot;'), '"'),
+    (re.compile(r'&gt;'), '>'),
+    (re.compile(r'&lt;'), '<'),
+    (re.compile(r'&pound;'), '£'),
+]
 
 
 def from_unix_ts(ts):
     return EPOCH + timedelta(seconds=ts)
+
+
+def clean_number(n):
+    return CLEAN_NUMBER.sub('', n.lower())
+
+
+def clean_str(s):
+    if isinstance(s, str):
+        for regex, rep in STR_REPLACE:
+            s = regex.sub(rep, s)
+    return s
 
 
 class Downloader(_Worker):
@@ -136,11 +158,11 @@ class Downloader(_Worker):
             data = await self._get(session, f'https://api.intercom.io/companies?per_page=60&page={page}')
             for company in data['companies']:
                 company_ic_id = company['id']
-                custom_attributes = dict(company['custom_attributes'])
+                custom_attributes = {k: clean_str(v) for k, v in company['custom_attributes'].items()}
                 login_url = custom_attributes.pop('login_url', None)
                 support_package = custom_attributes.pop('support_package', None)
                 company_lookup[company_ic_id] = await stmt.fetchval(
-                    company['name'],
+                    clean_str(company['name']),
                     company_ic_id,
                     from_unix_ts(company['created_at']),
                     login_url,
@@ -185,14 +207,12 @@ class Downloader(_Worker):
     INSERT INTO people_numbers (person, number) VALUES ($1, $2)
     ON CONFLICT DO NOTHING
     """
-    clean_numbers = re.compile(r'[^\+\d]')
 
     async def update_people(self, session, conn, company_lookup):
         start = time()
         people_match_stmt = await conn.prepare(self.people_name_match_sql)
         people_stmt = await conn.prepare(self.people_insert_sql)
         number_stmt = await conn.prepare(self.number_insert_sql)
-        update_stmp = await conn.prepare('SELECT update_search($1)')
         updated = 0
         duplicates = 0
         ignore = {'Clients', 'Contractors', 'Agents', 'ServiceRecipients'}
@@ -207,11 +227,13 @@ class Downloader(_Worker):
                     # debug(user)
                     logger.error('unable to find company for user %s', user, extra={'data': {'user': user}})
                     raise
-                ic_id, name, last_seen = user['id'], user['name'], from_unix_ts(user['last_request_at'])
+                ic_id = user['id']
+                name = clean_str(user['name'])
+                last_seen = from_unix_ts(user['last_request_at'])
                 details = json.dumps(dict(
-                    user_agent=user['user_agent_data'],
-                    city=user['location_data'].get('city_name'),
-                    country=user['location_data'].get('country_name'),
+                    user_agent=clean_str(user['user_agent_data']),
+                    city=clean_str(user['location_data'].get('city_name')),
+                    country=clean_str(user['location_data'].get('country_name')),
                 ))
 
                 r = await people_match_stmt.fetchrow(company, ic_id, name)
@@ -232,9 +254,7 @@ class Downloader(_Worker):
                         details,
                     )
 
-                number = self.clean_numbers.sub('', user['phone'].lower())
-                await number_stmt.fetchval(user_id, number)
-                await update_stmp.fetchval(user_id)
+                await number_stmt.fetchval(user_id, clean_number(user['phone']))
                 updated += 1
             if not data['pages']['next']:
                 t = time() - start

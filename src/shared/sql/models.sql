@@ -30,7 +30,7 @@ CREATE TABLE people_numbers (
   number VARCHAR(127),
   UNIQUE (person, number)
 );
-CREATE INDEX number_index ON people_numbers USING btree (number);
+CREATE INDEX number_index ON people_numbers USING GIN (number gin_trgm_ops);
 
 CREATE TABLE calls (
   id SERIAL PRIMARY KEY,

@@ -1,5 +1,6 @@
 # this should install everything you need for development or testing
 -r src/requirements.txt
+-r src/requirements-web.txt
 -r tests/requirements.txt
 aiohttp-devtools==0.8
 ipython==6.2.1

@@ -46,28 +46,22 @@ DROP TRIGGER IF EXISTS after_calls_insert ON calls;
 CREATE TRIGGER after_calls_insert AFTER INSERT ON calls FOR EACH ROW EXECUTE PROCEDURE call_notify();
 
 
--- not a trigger as peole_numbers needs to have been updated before this is called
-CREATE OR REPLACE FUNCTION update_search(person_id INT) RETURNS void AS $$
+CREATE OR REPLACE FUNCTION people_search() RETURNS trigger AS $$
   DECLARE
-    company_id INT;
-    person_name VARCHAR(255);
-    person_details JSONB;
     company_name VARCHAR(255);
     company_login_url VARCHAR(255);
-    numbers TEXT;
   BEGIN
-    SELECT name, details, company INTO person_name, person_details, company_id FROM people WHERE id=person_id;
-    SELECT co.name, co.login_url INTO company_name, company_login_url FROM companies AS co WHERE co.id=company_id;
-    SELECT array_to_string(array_agg(number), ' | ') INTO numbers FROM people_numbers WHERE person=person_id;
+    SELECT co.name, co.login_url INTO company_name, company_login_url FROM companies AS co WHERE co.id=NEW.company;
 
-    UPDATE people SET search=concat_ws(' | ',
-        person_name,
-        COALESCE(numbers, ''),
-        company_name,
-        COALESCE(company_login_url, ''),
-        COALESCE(person_details->>'city', ''),
-        COALESCE(person_details->>'country', '')
-    ) WHERE id=person_id;
+    NEW.search := concat_ws(' | ',
+      NEW.name,
+      company_name,
+      COALESCE(company_login_url, ''),
+      COALESCE(NEW.details->>'city', ''),
+      COALESCE(NEW.details->>'country', '')
+    );
+    return NEW;
   END;
 $$ LANGUAGE plpgsql;
-DROP TRIGGER IF EXISTS update_search ON people;
+DROP TRIGGER IF EXISTS people_search ON people;
+CREATE TRIGGER people_search BEFORE INSERT OR UPDATE ON people FOR EACH ROW EXECUTE PROCEDURE people_search();

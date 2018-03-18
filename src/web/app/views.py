@@ -63,6 +63,8 @@ async def main_ws(request):
         await ws.close(code=4403)
         return ws
 
+    user = '{first_name} {last_name} ({email})'.format(**session['user']).strip(' ')
+    logger.info('ws connection from %s', user)
     json_str = await request.app['pg'].fetchval(calls_sql)
     await ws.send_str(json_str or '[]')
     request.app['ws_propagator'].add_ws(ws)
@@ -75,6 +77,7 @@ async def main_ws(request):
         pass
     finally:
         request.app['ws_propagator'].remove_ws(ws)
+        logger.info('websocket disconnected: %s', user)
     return ws
 
 
@@ -200,15 +203,17 @@ people_search_sql = """
 SELECT array_to_json(array_agg(row_to_json(t)), TRUE)
 FROM (
   SELECT p.id AS id, p.name AS name, p.last_seen AS last_seen,
-  co.name AS company_name, co.id as company_id,
-  similarity(search, $1) similarity
+  co.name AS company_name, co.id AS company_id,
+  similarity(p.search, $1) AS sim,
+  similarity(array_to_string(array_agg(pn.number), ' '), $1) AS num_sim
 
   FROM people AS p
   LEFT JOIN people_numbers AS pn ON p.id = pn.person
   LEFT JOIN companies AS co ON p.company = co.id
-  WHERE p.search ILIKE $2
+  WHERE
+    p.search ILIKE $2 OR pn.number ILIKE $2
   GROUP BY p.id, co.id
-  ORDER BY similarity DESC, p.last_seen DESC
+  ORDER BY num_sim DESC, sim DESC, p.last_seen DESC
   LIMIT 10
 ) t;
 """
@@ -217,7 +222,6 @@ FROM (
 async def search(request):
     query = request.query.get('q')
     json_str = None
-    if query and len(query) >= 3:
+    if query and len(query) >= 2:
         json_str = await request.app['pg'].fetchval(people_search_sql, query, f'%{query}%')
-        print(json_str)
     return raw_json_response(json_str or '[]')
