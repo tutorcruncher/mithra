@@ -3,7 +3,9 @@ import os
 import sys
 
 from raven import Client
-from raven_aiohttp import AioHttpTransport
+
+# https://github.com/getsentry/raven-aiohttp/issues/27
+# from raven_aiohttp import AioHttpTransport
 
 
 def setup_logging():
@@ -33,8 +35,7 @@ def setup_logging():
             'sentry': {
                 'level': 'WARNING',
                 'class': 'raven.handlers.logging.SentryHandler',
-                'client': Client(transport=AioHttpTransport),
-                'dsn': raven_dsn,
+                'client': Client(dsn=raven_dsn),  # , transport=AioHttpTransport
                 'release': os.getenv('COMMIT', None),
                 'name': os.getenv('SERVER_NAME', '-')
             },

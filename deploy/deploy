@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
 set -e
 THIS_DIR=$(dirname "$0")
-eval "${THIS_DIR}/compose up -d --build $@"
+eval "${THIS_DIR}/compose pull js backend web"
+# NOTICE: by default this doesn't build nginx/prod, you need to add --build for that
+eval "${THIS_DIR}/compose up -d $@"

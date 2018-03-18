@@ -8,7 +8,7 @@ from aiohttp_session import get_session
 
 from .utils import JsonErrors
 
-request_logger = logging.getLogger('mithra.web.middleware')
+logger = logging.getLogger('mithra.web.middleware')
 IP_HEADER = 'X-Forwarded-For'
 
 
@@ -36,7 +36,7 @@ async def log_extra(request, response=None):
 
 async def log_warning(request, response):
     ip, ua = get_ip(request), request.headers.get('User-Agent')
-    request_logger.warning('%s %d from %s ua: "%s"', request.rel_url, response.status, ip, ua, extra={
+    logger.warning('%s %d from %s ua: "%s"', request.rel_url, response.status, ip, ua, extra={
         'fingerprint': [request.rel_url, str(response.status)],
         'data': await log_extra(request, response)
     })
@@ -55,7 +55,7 @@ async def error_middleware(request, handler):
             await log_warning(request, e)
         raise
     except BaseException as e:
-        request_logger.exception('%s: %s', e.__class__.__name__, e, extra={
+        logger.exception('%s: %s', e.__class__.__name__, e, extra={
             'fingerprint': [e.__class__.__name__, str(e)],
             'data': await log_extra(request)
         })
