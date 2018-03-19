@@ -27,7 +27,7 @@ echo ""
 
 echo "================================================================================"
 echo "building mithra_web..."
-docker build src/ -f src/Dockerfile.web  -t $DOCKER_ID_USER/mithra_web:${COMMIT} -t $DOCKER_ID_USER/mithra_web:latest
+docker build src/ -f src/Dockerfile.web -t $DOCKER_ID_USER/mithra_web:${COMMIT} -t $DOCKER_ID_USER/mithra_web:latest
 echo "================================================================================"
 echo "building mithra_web done"
 echo ""

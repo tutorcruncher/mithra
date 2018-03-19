@@ -152,7 +152,8 @@ class Downloader(_Worker):
 
     async def update_companies(self, session, conn):
         start = time()
-        company_lookup = {}
+        # pre-fill companies in case intercom misses some
+        company_lookup = dict(await conn.fetch('SELECT ic_id, id FROM companies'))
         stmt = await conn.prepare(self.companies_insert_sql)
         for page in range(1, int(1e6)):
             data = await self._get(session, f'https://api.intercom.io/companies?per_page=60&page={page}')
@@ -226,7 +227,8 @@ class Downloader(_Worker):
                     company = company_lookup[user_company_ic_id]
                 except KeyError:
                     # debug(user)
-                    logger.exception('unable to find company %s', user_company_ic_id, extra={'data': {'user': user}})
+                    logger.error('unable to find company %s', user_company_ic_id,
+                                 exc_info=True, extra={'data': {'user': user}})
                     continue
                 ic_id = user['id']
                 name = clean_str(user['name'])
@@ -262,7 +264,7 @@ class Downloader(_Worker):
                 logger.info('updated %d people with %d duplicates in %0.2f seconds', updated, duplicates, t)
                 return company_lookup
 
-    async def download(self):
+    async def download(self, force=False):
         if not self.settings.intercom_key:
             logger.info("intercom key not set, can't download data")
             return self.FREQ
@@ -278,9 +280,11 @@ class Downloader(_Worker):
             pass
         else:
             if age < (self.FREQ - 60):
-                run_in = self.FREQ - age
-                logger.info('download run recently (%s)', cache_file)
-                return run_in
+                if force:
+                    logger.info('download run recently (%s), forcing download', cache_file)
+                else:
+                    logger.info('download run recently (%s)', cache_file)
+                    return self.FREQ - age
 
         headers = {
             'Content-Type': 'application/json',
@@ -315,7 +319,7 @@ class Downloader(_Worker):
                     return
 
 
-async def download_from_intercom(settings):
+async def download_from_intercom(settings, force=False):
     pg = await asyncpg.create_pool(dsn=settings.pg_dsn)
     downloader = Downloader({'settings': settings, 'pg': pg}, start=False)
-    await downloader.download()
+    await downloader.download(force)

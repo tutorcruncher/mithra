@@ -41,9 +41,9 @@ def check():
         exit(exit_code)
 
 
-def download_from_intercom(settings):
+def download_from_intercom(settings, force=False):
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(_download_from_intercom(settings))
+    loop.run_until_complete(_download_from_intercom(settings, force))
 
 
 if __name__ == '__main__':
@@ -69,7 +69,7 @@ if __name__ == '__main__':
             args.remove('--live')
         run_patch(settings, live, args[0] if args else None)
     elif command == 'download_from_intercom':
-        download_from_intercom(settings)
+        download_from_intercom(settings, '--force' in args)
     elif command == 'web':
         print('running web server...')
         app = create_app(settings=settings)
