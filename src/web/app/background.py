@@ -221,12 +221,13 @@ class Downloader(_Worker):
             for user in data['users']:
                 if not user['phone'] or user['name'] in ignore:
                     continue
+                user_company_ic_id = user['companies']['companies'][0]['id']
                 try:
-                    company = company_lookup[user['companies']['companies'][0]['id']]
+                    company = company_lookup[user_company_ic_id]
                 except KeyError:
                     # debug(user)
-                    logger.error('unable to find company for user %s', user, extra={'data': {'user': user}})
-                    raise
+                    logger.exception('unable to find company %s', user_company_ic_id, extra={'data': {'user': user}})
+                    continue
                 ic_id = user['id']
                 name = clean_str(user['name'])
                 last_seen = from_unix_ts(user['last_request_at'])
