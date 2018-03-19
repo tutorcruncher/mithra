@@ -46,10 +46,15 @@ export default function CallsWebSocket (app) {
         app.setState({auth: false})
       } else {
         console.warn('websocket closed, reconnecting in 5 seconds', e)
-        app.setState({status: 'offline'})
 
-        app.setState({ws_calls: []})
-        setTimeout(this.connect, 5000)
+
+        setTimeout(this.connect, 3000)
+        setTimeout(() => {
+          // if we're still not connected clear the calls list
+          if (!this._connected) {
+            app.setState({status: 'offline', ws_calls: []})
+          }
+        }, 5000)
       }
     }
     socket.onerror = e => {
