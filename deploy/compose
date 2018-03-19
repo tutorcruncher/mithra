@@ -8,7 +8,7 @@ if [ ! -v PG_AUTH_PASS ] ; then
     echo '$PG_AUTH_PASS must be set before running compose in production or beta mode'
     exit 1
 fi
-export COMMIT="`git symbolic-ref --short HEAD`:`git rev-parse HEAD`"
+export COMMIT="`git symbolic-ref --short HEAD`:`git rev-parse --short HEAD`"
 export RELEASE_DATE=`date`
 the_command="docker-compose -f docker-compose.yml -f ${COMPOSE_EXTRA:-docker-compose.prod.yml} $@"
 echo "Running '${the_command}'..."

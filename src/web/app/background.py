@@ -214,12 +214,12 @@ class Downloader(_Worker):
         people_match_stmt = await conn.prepare(self.people_name_match_sql)
         people_stmt = await conn.prepare(self.people_insert_sql)
         number_stmt = await conn.prepare(self.number_insert_sql)
-        updated = 0
-        duplicates = 0
+        downloaded, updated, duplicates = 0, 0, 0
         ignore = {'Clients', 'Contractors', 'Agents', 'ServiceRecipients'}
         for page in range(1, int(1e6)):
             data = await self._get(session, f'https://api.intercom.io/users?per_page=60&page={page}')
             for user in data['users']:
+                downloaded += 1
                 if not user['phone'] or user['name'] in ignore:
                     continue
                 user_company_ic_id = user['companies']['companies'][0]['id']
@@ -261,8 +261,17 @@ class Downloader(_Worker):
                 updated += 1
             if not data['pages']['next']:
                 t = time() - start
-                logger.info('updated %d people with %d duplicates in %0.2f seconds', updated, duplicates, t)
+                logger.info('downloaded %d people, updated %d with %d duplicates in %0.2f seconds',
+                            downloaded, updated, duplicates, t)
                 return company_lookup
+
+    async def match_existing_calls(self, conn):
+        # no-op update will execute the fill_call function and fill in person where applicable
+        r = await conn.execute("""
+        UPDATE calls SET id=id
+        WHERE person IS NULL
+        """)
+        logger.info('updated calls with no person: %s', r)
 
     async def download(self, force=False):
         if not self.settings.intercom_key:
@@ -298,6 +307,7 @@ class Downloader(_Worker):
             async with self.app['pg'].acquire() as conn:
                 company_lookup = await self.update_companies(session, conn)
                 await self.update_people(session, conn, company_lookup)
+                await self.match_existing_calls(conn)
 
         logger.info('companies and people updated from intercom in %0.2fs, total request time %0.2fs',
                     time() - start, self.request_time)

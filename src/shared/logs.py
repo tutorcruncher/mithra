@@ -39,7 +39,7 @@ def setup_logging():
                     # https://github.com/getsentry/raven-aiohttp/issues/27
                     # transport=AioHttpTransport,
                     release=os.getenv('COMMIT', None),
-                    name=os.getenv('IMAGE_NAME'),
+                    name=os.getenv('IMAGE_NAME', None),
                 ),
             },
         },
