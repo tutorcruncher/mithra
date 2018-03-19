@@ -11,6 +11,7 @@ ADD ./shared /home/root/shared
 ADD ./backend/main.py /home/root/main.py
 ADD ./backend/run.py /home/root/run.py
 
+ENV IMAGE_NAME mithra_backend
 ENV PYTHONUNBUFFERED 1
 WORKDIR /home/root
 ENTRYPOINT ["./run.py"]
