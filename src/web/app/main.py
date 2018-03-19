@@ -23,7 +23,7 @@ async def startup(app: web.Application):
     settings: Settings = app['settings']
     await prepare_database(settings, False)
     app.update(
-        pg=await asyncpg.create_pool(dsn=settings.pg_dsn),
+        pg=await asyncpg.create_pool(dsn=settings.pg_dsn, min_size=2),
         ws_propagator=WebsocketPropagator(app),
         downloader=Downloader(app),
     )

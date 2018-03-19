@@ -320,6 +320,6 @@ class Downloader(_Worker):
 
 
 async def download_from_intercom(settings, force=False):
-    pg = await asyncpg.create_pool(dsn=settings.pg_dsn)
+    pg = await asyncpg.create_pool(dsn=settings.pg_dsn, min_size=1)
     downloader = Downloader({'settings': settings, 'pg': pg}, start=False)
     await downloader.download(force)
