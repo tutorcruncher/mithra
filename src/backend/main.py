@@ -39,7 +39,7 @@ NONCE_REGEX = re.compile('nonce="(.+?)"')
 RESPONSE_DECODE = re.compile(r'SIP/2.0 (?P<status_code>[0-9]{3}) (?P<status_message>.+)')
 REQUEST_DECODE = re.compile(r'(?P<method>[A-Za-z]+) (?P<to_uri>.+) SIP/2.0')
 FIND_BRANCH = re.compile(r'branch=(.+?);')
-NUMBER = re.compile(r'sip:(\d+)@')
+NUMBER = re.compile(r'sip:\+*([\d]+)@')
 
 
 class Response(NamedTuple):
@@ -330,7 +330,7 @@ class SipClient:
         else:
             number = 'unknown'
             logger.warning('unable to find number in "%s"', from_header, extra={
-                'data': {'headers': headers}
+                'data': {'headers': dict(headers)}
             })
         country = headers.get('X-Brand', None)
         logger.info(f'incoming call from %s%s', number, f' ({country})' if country else '')
