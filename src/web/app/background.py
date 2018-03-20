@@ -163,7 +163,7 @@ class Downloader(_Worker):
                 login_url = custom_attributes.pop('login_url', None)
                 support_package = custom_attributes.pop('support_package', None)
                 company_lookup[company_ic_id] = await stmt.fetchval(
-                    clean_str(company['name']),
+                    clean_str(company.get('name') or company['company_id']),
                     company_ic_id,
                     from_unix_ts(company['created_at']),
                     login_url,
