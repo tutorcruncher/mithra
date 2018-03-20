@@ -4,10 +4,8 @@ import sys
 
 from raven import Client
 
-# from raven_aiohttp import AioHttpTransport
 
-
-def setup_logging():
+def setup_logging(disable_existing=False):
     """
     setup logging config by updating the arq logging config
     """
@@ -19,7 +17,7 @@ def setup_logging():
         raven_dsn = None
     config = {
         'version': 1,
-        'disable_existing_loggers': False,
+        'disable_existing_loggers': disable_existing,
         'formatters': {
             'mithra.default': {
                 'format': '%(levelname)-7s %(name)25s: %(message)s',
@@ -36,8 +34,6 @@ def setup_logging():
                 'class': 'raven.handlers.logging.SentryHandler',
                 'client': Client(
                     dsn=raven_dsn,
-                    # https://github.com/getsentry/raven-aiohttp/issues/27
-                    # transport=AioHttpTransport,
                     release=os.getenv('COMMIT', None),
                     name=os.getenv('IMAGE_NAME', None),
                 ),

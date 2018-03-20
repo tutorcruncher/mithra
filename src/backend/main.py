@@ -8,7 +8,6 @@ from pathlib import Path
 from typing import NamedTuple
 
 import asyncpg
-from multidict import CIMultiDict
 
 from shared.db import lenient_conn
 from shared.settings import PgSettings
@@ -28,6 +27,10 @@ class Settings(PgSettings):
     sip_username: str
     sip_password: str
     cache_dir: str = '/tmp/mithra'
+    sentinel_file: str = 'sentinel.txt'
+
+    # expires time on register commands, will re-register every (register_expires - 1) seconds
+    register_expires = 300
 
     @property
     def sip_uri(self):
@@ -50,11 +53,14 @@ class Response(NamedTuple):
 
 
 def parse_headers(raw_headers):
-    headers = CIMultiDict()
+    headers = {}
     decoded_headers = raw_headers.decode().split('\r\n')
     for line in decoded_headers[1:]:
         k, v = line.split(': ', 1)
-        headers.add(k, v)
+        if k in headers:
+            headers[k] += '\n' + v
+        else:
+            headers[k] = v
 
     for regex in (RESPONSE_DECODE, REQUEST_DECODE):
         m = regex.match(decoded_headers[0])
@@ -124,14 +130,15 @@ class SipProtocol:
         logger.error('error received: %s', exc)
 
     def connection_lost(self, exc):
-        logger.debug('connection lost: %s', exc)
+        if exc:
+            logger.warning('connection lost: %s', exc)
+        else:
+            logger.debug('connection lost')
 
 
 class SipClient:
     # time to wait before re-registering if an error occurred
     ERROR_WAIT = 30
-    # expires time on register commands, will re-register every (expires - 1) seconds
-    EXPIRES = 300
 
     def __init__(self, settings: Settings, db: Database, loop):
         self.settings = settings
@@ -145,7 +152,7 @@ class SipClient:
         self.request_future = None
         self.call_cache = {}
         self.task = None
-        self.running = False
+        self.stopping = None
 
         cache_dir = Path(self.settings.cache_dir)
         cache_dir.mkdir(exist_ok=True, parents=True)
@@ -158,28 +165,28 @@ class SipClient:
             logger.info('generated new Caller-ID: "%s", saved to %s', self.call_id, cache_file)
         else:
             logger.info('loaded Caller-ID from %s: "%s"', cache_file, self.call_id)
+        self.sentinal_file = cache_dir / settings.sentinel_file
 
     async def init(self):
         addr = self.settings.sip_host, self.settings.sip_port
         await self.loop.create_datagram_endpoint(self.protocol_factory, remote_addr=addr)
         await self.connected.wait()
-        self.running = True
         logger.info('starting main task...')
         self.task = self.loop.create_task(self.main_task())
-        self.loop.add_signal_handler(signal.SIGINT, self.stop)
-        self.loop.add_signal_handler(signal.SIGTERM, self.stop)
+        self.loop.add_signal_handler(signal.SIGINT, self.stop, 'sigint')
+        self.loop.add_signal_handler(signal.SIGTERM, self.stop, 'sigterm')
 
     async def main_task(self):
         try:
             while True:
-                re_register = await self.register(expires=self.EXPIRES)
+                re_register = await self.register(expires=self.settings.register_expires)
                 logger.info('re-registering in %d seconds', re_register)
                 for i in range(re_register):
                     await asyncio.sleep(1)
-                    if not self.running:
+                    if self.stopping:
                         return
         finally:
-            logger.info('un-registering...')
+            logger.info('stopping reason: "%s", un-registering...', self.stopping)
             await self.register(expires=0)
             self.transport.close()
             await self.db.close()
@@ -187,9 +194,9 @@ class SipClient:
     async def run(self):
         await self.task
 
-    def stop(self):
-        print('')  # leaves the ^C on it's own line
-        self.running = False
+    def stop(self, reason):
+        print('', flush=True)  # leaves the ^C on it's own line
+        self.stopping = reason or 'unknown'
 
     async def register(self, *, expires):
         common_headers = (
@@ -244,6 +251,7 @@ class SipClient:
         else:
             re_register = max(10, expires - 1)
             logger.info('successfully registered')
+            self.sentinal_file.touch(exist_ok=True)
             return re_register
 
     def protocol_factory(self):
@@ -330,7 +338,7 @@ class SipClient:
         else:
             number = 'unknown'
             logger.warning('unable to find number in "%s"', from_header, extra={
-                'data': {'headers': dict(headers)}
+                'data': {'headers': headers}
             })
         country = headers.get('X-Brand', None)
         logger.info(f'incoming call from %s%s', number, f' ({country})' if country else '')
@@ -349,4 +357,7 @@ def main():
     loop = asyncio.get_event_loop()
     settings = Settings()
     client = loop.run_until_complete(setup(settings, loop))
-    loop.run_until_complete(client.run())
+    try:
+        loop.run_until_complete(client.run())
+    finally:
+        loop.close()

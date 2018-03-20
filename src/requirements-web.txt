@@ -1,3 +1,5 @@
+aiohttp==3.0.9
 aiohttp_session[secure]==2.3.0
 cryptography==2.1.4
 google-auth==1.4.1
+uvloop==0.9.1

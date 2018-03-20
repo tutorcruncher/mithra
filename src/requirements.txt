@@ -1,8 +1,4 @@
-aiohttp==3.0.9
 asyncpg==0.15.0
 async-timeout==2.0.1
-multidict==4.1.0
 pydantic==0.7.1
 raven==6.6.0
-raven-aiohttp==0.6.0
-uvloop==0.9.1
