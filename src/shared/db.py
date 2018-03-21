@@ -17,7 +17,7 @@ async def lenient_conn(settings, with_db=True):
 
     for retry in range(8, -1, -1):
         try:
-            with timeout(2):
+            async with timeout(2):
                 conn = await asyncpg.connect(dsn=dsn)
         except (asyncpg.PostgresError, OSError) as e:
             if retry == 0:

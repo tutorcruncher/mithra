@@ -223,7 +223,7 @@ class SipClient:
     async def connect_transport(self):
         addr = self.settings.sip_host, self.settings.sip_port
         connected = asyncio.Event()
-        with timeout(10):
+        async with timeout(10):
             self.transport, _ = await self.loop.create_datagram_endpoint(
                 lambda: SipProtocol(connected, self.datagram_callback),
                 remote_addr=addr
@@ -294,7 +294,7 @@ class SipClient:
     async def request(self, *req):
         request_data = '\r\n'.join(req) + '\r\n\r\n'
         async with self.request_lock:
-            with timeout(10):
+            async with timeout(10):
                 status, headers, response_data = await self._request(request_data)
         # debug(request_data, status, dict(headers))
         self.request_future = None
