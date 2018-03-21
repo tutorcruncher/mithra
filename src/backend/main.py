@@ -5,9 +5,11 @@ import re
 import secrets
 import signal
 from pathlib import Path
+from time import time
 from typing import NamedTuple
 
 import asyncpg
+from async_timeout import timeout
 
 from shared.db import lenient_conn
 from shared.settings import PgSettings
@@ -102,24 +104,33 @@ class Database:
         number = number.replace(' ', '').upper()
         await self._pg.execute('INSERT INTO calls (number, country) VALUES ($1, $2)', number, country)
 
+    async def complete_tasks(self):
+        if self.tasks:
+            await asyncio.gather(*self.tasks)
+            self.tasks = []
+
     async def close(self):
-        await asyncio.gather(*self.tasks)
+        await self.complete_tasks()
         await self._pg.close()
 
 
 class SipProtocol:
-    def __init__(self, sip_client):
-        self.client = sip_client
+    def __init__(self, connected_event, datagram_callback):
+        self.connected_event = connected_event
+        self.datagram_callback = datagram_callback
 
     def connection_made(self, transport):
         logger.info('connection established')
-        self.client.connection_made(transport)
+        self.connected_event.set()
 
     def datagram_received(self, data, addr):
+        if data.startswith(b'\x00'):
+            logger.debug('ping from server: %s (%s), ignoring', data, addr)
+            return
         try:
-            self.client.process_datagram(data, addr)
+            self.datagram_callback(data)
         except Exception as e:
-            logger.error('error processing datagram %s: %s', type(e), e, extra={
+            logger.exception('error processing datagram %s: %s', type(e), e, extra={
                 'data': {
                     'datagram': try_decode(data),
                     'addr': addr
@@ -147,7 +158,6 @@ class SipClient:
         self.transport = None
         self.local_ip = None
         self.cseq = 1
-        self.connected = asyncio.Event()
         self.request_lock = asyncio.Lock()
         self.request_future = None
         self.call_cache = {}
@@ -167,11 +177,7 @@ class SipClient:
             logger.info('loaded Caller-ID from %s: "%s"', cache_file, self.call_id)
         self.sentinal_file = cache_dir / settings.sentinel_file
 
-    async def init(self):
-        addr = self.settings.sip_host, self.settings.sip_port
-        await self.loop.create_datagram_endpoint(self.protocol_factory, remote_addr=addr)
-        await self.connected.wait()
-        logger.info('starting main task...')
+    async def start(self):
         self.task = self.loop.create_task(self.main_task())
         self.loop.add_signal_handler(signal.SIGINT, self.stop, 'sigint')
         self.loop.add_signal_handler(signal.SIGTERM, self.stop, 'sigterm')
@@ -179,24 +185,46 @@ class SipClient:
     async def main_task(self):
         try:
             while True:
-                re_register = await self.register(expires=self.settings.register_expires)
-                logger.info('re-registering in %d seconds', re_register)
-                for i in range(re_register):
-                    await asyncio.sleep(1)
-                    if self.stopping:
-                        return
+                if self.transport:
+                    logger.info('un-registering and creating new transport...')
+                    await self.register(expires=0)
+                    self.transport.close()
+
+                await self.connect_transport()
+                for i in range(20):
+                    re_register = await self.register(expires=self.settings.register_expires)
+                    logger.info('re-registering in %d seconds', re_register)
+                    start = time()
+                    while True:
+                        await asyncio.sleep(1)
+                        await self.db.complete_tasks()
+                        if self.stopping:
+                            return
+                        if (time() - start) > re_register:
+                            break
         finally:
             logger.info('stopping reason: "%s", un-registering...', self.stopping)
-            await self.register(expires=0)
-            self.transport.close()
+            if self.transport:
+                await self.register(expires=0)
+                self.transport.close()
             await self.db.close()
 
-    async def run(self):
+    async def run_forever(self):
         await self.task
 
     def stop(self, reason):
         print('', flush=True)  # leaves the ^C on it's own line
         self.stopping = reason or 'unknown'
+
+    async def connect_transport(self):
+        addr = self.settings.sip_host, self.settings.sip_port
+        connected = asyncio.Event()
+        self.transport, _ = await self.loop.create_datagram_endpoint(
+            lambda: SipProtocol(connected, self.datagram_callback),
+            remote_addr=addr
+        )
+        await connected.wait()
+        self.local_ip, _ = self.transport.get_extra_info('sockname')
 
     async def register(self, *, expires):
         common_headers = (
@@ -254,14 +282,6 @@ class SipClient:
             self.sentinal_file.touch(exist_ok=True)
             return re_register
 
-    def protocol_factory(self):
-        return SipProtocol(self)
-
-    def connection_made(self, transport):
-        self.transport = transport
-        self.local_ip, _ = transport.get_extra_info('sockname')
-        self.connected.set()
-
     def gen_branch(self):
         # "z9hG4bK" is a special value which branch is apparently supposed to start with
         return 'z9hG4bK' + secrets.token_hex()[:16]
@@ -269,21 +289,20 @@ class SipClient:
     async def request(self, *req):
         request_data = '\r\n'.join(req) + '\r\n\r\n'
         async with self.request_lock:
-            status, headers, response_data = await self._request(request_data)
+            with timeout(2):
+                status, headers, response_data = await self._request(request_data)
         # debug(request_data, status, dict(headers))
         self.request_future = None
         return Response(status, headers, response_data, request_data)
 
     def _request(self, data: str):
+        assert self.transport, 'no transport initialised'
+        self.request_future = asyncio.Future()
         self.transport.sendto(data.encode())
         self.cseq += 1
-        self.request_future = asyncio.Future()
         return self.request_future
 
-    def process_datagram(self, raw_data: bytes, addr):
-        if raw_data.startswith(b'\x00'):
-            # ping from server, ignore
-            return
+    def datagram_callback(self, raw_data: bytes):
         headers, data = raw_data.split(b'\r\n\r\n', 1)
         status, headers = parse_headers(headers)
         if 'status_code' in status:
@@ -349,15 +368,16 @@ async def setup(settings, loop):
     db = Database(settings, loop)
     await db.init()
     client = SipClient(settings, db, loop)
-    await client.init()
+    await client.start()
     return client
 
 
 def main():
     loop = asyncio.get_event_loop()
     settings = Settings()
-    client = loop.run_until_complete(setup(settings, loop))
     try:
-        loop.run_until_complete(client.run())
+        client: SipClient = loop.run_until_complete(setup(settings, loop))
+        loop.run_until_complete(client.run_forever())
+        client.task.result()
     finally:
         loop.close()
