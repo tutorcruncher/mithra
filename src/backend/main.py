@@ -333,13 +333,64 @@ class SipClient:
             # don't care
             pass
         elif method == 'INVITE':
-            self.process_incoming_call(headers)
+            # self.process_incoming_call(headers)
+            body = data.decode()
+            debug(status, headers, body)
+            via1, via2 = headers['Via'].split('\n')
+            response = (
+                'SIP/2.0 180 Ringing',
+                f'Via: {via1}',
+                f'Via: {via2}',
+                f'From: <sip:{self.settings.sip_username}@{self.settings.sip_host}:{self.settings.sip_port}>',
+                f'To: <sip:{self.settings.sip_username}@{self.settings.sip_host}:{self.settings.sip_port}>',
+                f'CSeq: {headers["CSeq"]}',
+                f'Contact: {headers["Contact"]}',
+                f'Call-ID: {headers["Call-ID"]}',
+                f'Server: TutorCruncher Mithra',
+                'Content-Length: 0',
+            )
+            response = '\r\n'.join(response)
+            # to answer the call:
+            # response = (
+            #     'SIP/2.0 200 OK',
+            #     f'Via: {via1}',
+            #     f'Via: {via2}',
+            #     # 'Via: SIP/2.0/UDP 192.168.1.180:5060;branch=z9hG4bK7aca9e34827f754b;received=81.145.43.130',
+            #     f'From: <sip:{self.settings.sip_username}@{self.settings.sip_host}:{self.settings.sip_port}>',
+            #     f'To: <sip:{self.settings.sip_username}@{self.settings.sip_host}:{self.settings.sip_port}>',
+            #     f'CSeq: {headers["CSeq"]}',
+            #     f'Contact: {headers["Contact"]}',
+            #     f'Call-ID: {headers["Call-ID"]}',
+            #     f'Server: TutorCruncher Mithra',
+            #     'Content-Length: 0',
+            # )
+            # response = '\r\n'.join(response) + '\r\n\r\n' + body
+            debug(response)
+            self.transport.sendto(response.encode())
+        elif method == 'CANCEL':
+            debug(status, headers, try_decode(data))
+            response = (
+                'SIP/2.0 200 OK',
+                f'Via: {headers["Via"]}',
+                f'From: {headers["From"]}',
+                f'To: {headers["To"]}',
+                f'CSeq: {headers["CSeq"]}',
+                f'Call-ID: {headers["Call-ID"]}',
+                f'User-Agent: TutorCruncher Mithra',
+                'Content-Length: 0',
+            )
+            debug(response)
+            response = '\r\n'.join(response) + '\r\n\r\n'
+            self.transport.sendto(response.encode())
+
         else:
+            decoded_data = try_decode(data)
+            debug('unknown request', status, headers, decoded_data)
             logger.warning('unknown request: %s', method, extra={
                 'data': {
                     'status': status,
                     'headers': headers,
-                    'data': try_decode(data),
+                    'data': decoded_data,
                 }
             })
 
