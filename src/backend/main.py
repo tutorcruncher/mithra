@@ -192,7 +192,11 @@ class SipClient:
 
                 await self.connect_transport()
                 for i in range(20):
-                    re_register = await self.register(expires=self.settings.register_expires)
+                    try:
+                        re_register = await self.register(expires=self.settings.register_expires)
+                    except asyncio.TimeoutError:
+                        logger.warning('timeout error registering', exc_info=True)
+                        re_register = self.ERROR_WAIT
                     logger.info('re-registering in %d seconds', re_register)
                     start = time()
                     while True:
@@ -219,11 +223,12 @@ class SipClient:
     async def connect_transport(self):
         addr = self.settings.sip_host, self.settings.sip_port
         connected = asyncio.Event()
-        self.transport, _ = await self.loop.create_datagram_endpoint(
-            lambda: SipProtocol(connected, self.datagram_callback),
-            remote_addr=addr
-        )
-        await connected.wait()
+        with timeout(10):
+            self.transport, _ = await self.loop.create_datagram_endpoint(
+                lambda: SipProtocol(connected, self.datagram_callback),
+                remote_addr=addr
+            )
+            await connected.wait()
         self.local_ip, _ = self.transport.get_extra_info('sockname')
 
     async def register(self, *, expires):
@@ -289,7 +294,7 @@ class SipClient:
     async def request(self, *req):
         request_data = '\r\n'.join(req) + '\r\n\r\n'
         async with self.request_lock:
-            with timeout(2):
+            with timeout(10):
                 status, headers, response_data = await self._request(request_data)
         # debug(request_data, status, dict(headers))
         self.request_future = None

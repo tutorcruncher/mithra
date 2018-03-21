@@ -1,14 +1,25 @@
 import {make_url} from './utils'
 
-const notify = async (msg) => {
+const show_notification = msg => {
+  const n = new Notification('Incoming Call', {
+    body: msg,
+    icon: '/phone.png',
+  })
+  n.onclick = () => {
+    window.focus()
+    n.close()
+  }
+}
+
+const notify_call = async msg => {
   if (!('Notification' in window)) {
     console.warn('This browser does not support desktop notification')
   } else if (msg && Notification.permission === 'granted') {
-    new Notification(msg)
+    show_notification(msg)
   } else if (Notification.permission !== 'denied') {
     let perms = await Notification.requestPermission()
     if (msg && perms === 'granted') {
-      new Notification(msg)
+      show_notification(msg)
     }
   }
 }
@@ -65,7 +76,7 @@ export default function CallsWebSocket (app) {
   }
 
   const on_message = event => {
-    first_msg && notify()
+    first_msg && notify_call()
     first_msg = false
     app.setState({status: 'online'})
     const data = JSON.parse(event.data)
@@ -86,7 +97,7 @@ export default function CallsWebSocket (app) {
       if (data.country) {
         msg += ` (${data.country})`
       }
-      notify('📞 ' + msg)
+      notify_call(msg)
       app.setState({status_alert: {time: new Date(), msg: 'Incoming Call: ' + msg}})
     }
     // to change new where applicable
