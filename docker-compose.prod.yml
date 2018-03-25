@@ -6,9 +6,6 @@ services:
     - '/bin/logspout'
     - '${LOGSPOUT_ENDPOINT}'
 
-  js:
-    image: samuelcolvin/mithra_js:latest
-
   backend:
     image: samuelcolvin/mithra_backend:latest
 
@@ -16,7 +13,10 @@ services:
     image: samuelcolvin/mithra_web:latest
 
   nginx:
-    build: nginx/prod
+    image: nginx:1.13-alpine
+    volumes:
+    - /home/ubuntu/nginx-conf/:/etc/nginx/conf.d/:ro
+    - /home/ubuntu/js-src/:/js-src/:ro
     restart: always
     ports:
     - 443:443
