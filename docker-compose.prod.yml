@@ -15,8 +15,8 @@ services:
   nginx:
     image: nginx:1.13-alpine
     volumes:
-    - ./nginx-conf/:/etc/nginx/conf.d/:ro
-    - ./js-src/:/js-src/:ro
+    - /home/ubuntu/nginx-conf/:/etc/nginx/conf.d/:ro
+    - /home/ubuntu/js-src/:/js-src/:ro
     restart: always
     ports:
     - 443:443

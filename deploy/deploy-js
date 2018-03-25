@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -e
+
+echo "================================================================================"
+echo "building js..."
+cd js
+yarn build
+cd ..
+echo "================================================================================"
+echo "building js done"
+
+echo ""
+echo "================================================================================"
+echo "copying js files to machine..."
+
+docker-machine scp -r -d js/build/ $DOCKER_MACHINE_NAME:/home/ubuntu/js-src/
+
+echo ""
+echo "================================================================================"
+echo "restarting nginx..."
+docker-compose $(docker-machine config $DOCKER_MACHINE_NAME) restart nginx

@@ -4,10 +4,10 @@ THIS_DIR=$(dirname "$0")
 
 echo ""
 echo "================================================================================"
-echo "moving nginx and js files to machine..."
+echo "copying nginx and js files to machine..."
 
-docker-machine scp -r -d $THIS_DIR/../nginx/prod/ mithra:/home/ubuntu/nginx-conf/
-docker-machine scp -r -d $THIS_DIR/../js/build/ $MACHINE_NAME:/home/ubuntu/js-src/
+docker-machine scp -r -d $THIS_DIR/../nginx/prod/ $DOCKER_MACHINE_NAME:/home/ubuntu/nginx-conf/
+docker-machine scp -r -d $THIS_DIR/../js/build/   $DOCKER_MACHINE_NAME:/home/ubuntu/js-src/
 
 echo ""
 echo "================================================================================"
@@ -18,5 +18,4 @@ eval "${THIS_DIR}/compose pull backend web"
 echo ""
 echo "================================================================================"
 echo "deploying new build..."
-# NOTICE: by default this doesn't build nginx/prod, you need to add --build for that
 eval "${THIS_DIR}/compose up -d $@"
