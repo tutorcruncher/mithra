@@ -18,7 +18,7 @@ services:
       SYSLOG_HOSTNAME: ${SERVER_NAME:-mithra}
     volumes:
     - /var/run/docker.sock:/var/run/docker.sock
-    restart: always
+    restart: unless-stopped
 
   postgres:
     image: postgres:10.3-alpine
@@ -27,15 +27,9 @@ services:
       POSTGRES_PASSWORD: docker
     volumes:
     - pg_data:/var/lib/postgresql/data
-    restart: always
+    restart: unless-stopped
     depends_on:
     - logs
-
-  js:
-    restart: always
-    networks:
-      default:
-        ipv4_address: 172.20.0.101
 
   web:
     environment:
@@ -48,7 +42,7 @@ services:
       RELEASE_DATE: ${RELEASE_DATE}
       RAVEN_DSN: ${RAVEN_DSN}
       SERVER_NAME: ${SERVER_NAME:-mithra}
-    restart: always
+    restart: unless-stopped
     volumes:
     - cache_data:/persistent
     networks:
@@ -71,7 +65,7 @@ services:
       SERVER_NAME: ${SERVER_NAME:-mithra}
     volumes:
     - cache_data:/persistent
-    restart: always
+    restart: unless-stopped
     depends_on:
     - postgres
 
@@ -83,7 +77,7 @@ services:
     - '--listen=80'
     - '--auth-user=${PG_AUTH_USER:-testing}'
     - '--auth-pass=${PG_AUTH_PASS:-wq96nbgqe35msT41Jr7LaHzANhxcyU4V7lesFzD0wJjef07PwS}'
-    restart: always
+    restart: unless-stopped
     environment:
     - DATABASE_URL=postgres://postgres:docker@postgres:5432/mithra?sslmode=disable
     networks:

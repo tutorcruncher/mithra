@@ -6,17 +6,16 @@ if [[ `docker info` = *"amazon"* ]]; then
   exit 1
 fi
 
-export COMMIT="`git rev-parse --short HEAD`"
-
 echo "================================================================================"
-echo "building mithra_js..."
+echo "building js..."
 cd js
 yarn build
 cd ..
-docker build js/ -t $DOCKER_ID_USER/mithra_js:${COMMIT} -t $DOCKER_ID_USER/mithra_js:latest
 echo "================================================================================"
-echo "building mithra_js done"
+echo "building js done"
 echo ""
+
+export COMMIT="`git rev-parse --short HEAD`"
 
 echo "================================================================================"
 echo "building mithra_backend..."
@@ -31,9 +30,6 @@ docker build src/ -f src/Dockerfile.web -t $DOCKER_ID_USER/mithra_web:${COMMIT} 
 echo "================================================================================"
 echo "building mithra_web done"
 echo ""
-echo "Pushing js image:"
-docker push $DOCKER_ID_USER/mithra_js:${COMMIT}
-docker push $DOCKER_ID_USER/mithra_js:latest
 echo "Pushing backend image:"
 docker push $DOCKER_ID_USER/mithra_backend:${COMMIT}
 docker push $DOCKER_ID_USER/mithra_backend:latest
