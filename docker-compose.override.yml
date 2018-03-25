@@ -16,7 +16,7 @@ services:
       dockerfile: Dockerfile.backend
 
   nginx:
-    image: nginx:1.13-alpine
+    image: samuelcolvin/nginx:1.13-alpine
     volumes:
     - ./nginx/dev/:/etc/nginx/conf.d/:ro
     - ./js/build/:/js-src/:ro
