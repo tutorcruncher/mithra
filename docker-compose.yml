@@ -51,6 +51,16 @@ services:
     depends_on:
     - postgres
 
+  proxy:
+    build: proxy
+    environment:
+      APP_SIP_HOST: ${APP_SIP_HOST}
+      APP_SIP_PORT: ${APP_SIP_PORT}
+    ports:
+    - 8060:8060/udp
+    depends_on:
+    - logs
+
   backend:
     environment:
       APP_PG_HOST: postgres
