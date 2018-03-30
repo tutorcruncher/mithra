@@ -32,11 +32,28 @@ CREATE TABLE people_numbers (
 );
 CREATE INDEX number_index ON people_numbers USING GIN (number gin_trgm_ops);
 
+CREATE TYPE BOUND AS ENUM ('inbound', 'outbound');
 CREATE TABLE calls (
   id SERIAL PRIMARY KEY,
-  number VARCHAR(127) NOT NULL,
+  call_id VARCHAR(127) NOT NULL,
+  ext_number VARCHAR(127),
+  int_number VARCHAR(127),
+  bound BOUND NOT NULL,
+  answered BOOLEAN DEFAULT FALSE,
+  finished BOOLEAN DEFAULT FALSE,
   person INT REFERENCES people,
   country VARCHAR(31),
-  ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  duration INTERVAL NOT NULL,
+  details JSONB
 );
+CREATE INDEX call_id ON calls USING btree (call_id);
 CREATE INDEX call_ts ON calls USING btree (ts);
+
+CREATE TABLE call_events (
+  id SERIAL PRIMARY KEY,
+  call INT REFERENCES calls,
+  ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  event VARCHAR(31) NOT NULL,
+  details JSONB
+);

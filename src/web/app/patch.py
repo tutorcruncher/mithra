@@ -99,3 +99,41 @@ async def run_logic_sql(conn, settings, **kwargs):
     run logic.sql code.
     """
     await conn.execute(settings.logic_sql)
+
+
+@patch
+async def update_call_model(conn, settings, **kwargs):
+    """
+    add call_events and modify calls
+    """
+    await conn.execute("""
+ALTER TABLE calls ADD call_id VARCHAR(127) NOT NULL DEFAULT '-';
+ALTER TABLE calls ALTER call_id DROP DEFAULT;
+
+ALTER TABLE calls ADD int_number VARCHAR(127);
+
+ALTER TABLE calls RENAME number TO ext_number;
+ALTER TABLE calls ALTER ext_number DROP NOT NULL;
+
+CREATE TYPE BOUND AS ENUM ('inbound', 'outbound');
+ALTER TABLE calls ADD bound BOUND NOT NULL DEFAULT 'inbound';
+ALTER TABLE calls ALTER bound DROP DEFAULT;
+
+ALTER TABLE calls ADD answered BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE calls ADD finished BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE calls DROP country;
+
+ALTER TABLE calls ADD duration INTERVAL NOT NULL DEFAULT '0s';
+ALTER TABLE calls ALTER duration DROP DEFAULT;
+
+ALTER TABLE calls ADD details JSONB;
+
+CREATE INDEX call_id ON calls USING btree (call_id);
+CREATE TABLE call_events (
+  id SERIAL PRIMARY KEY,
+  call INT REFERENCES calls,
+  ts TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  event VARCHAR(31) NOT NULL
+);""")
