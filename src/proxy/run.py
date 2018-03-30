@@ -13,7 +13,7 @@ from shared.logs import setup_logging  # NOQA
 from main import Settings, main  # NOQA
 
 
-logger = logging.getLogger('mithra.backend.run')
+logger = logging.getLogger('mithra.proxy.run')
 
 
 def check():
